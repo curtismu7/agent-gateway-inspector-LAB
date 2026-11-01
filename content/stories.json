@@ -1,0 +1,32 @@
+[
+  {
+    "id": "S01",
+    "title": "Call",
+    "say": "A scripted agent asks for a tool. It cannot choose a URL or a port, and it carries no scopes of its own."
+  },
+  {
+    "id": "S02",
+    "title": "Decide",
+    "say": "After the scope layers, the gateway checks the rate, then the rules. Deny beats hold beats allow, no match means deny, and an evaluation error denies."
+  },
+  {
+    "id": "S03",
+    "title": "Forward",
+    "say": "Only an allowed call reaches a stub tool server on loopback. A denied or held call never does."
+  },
+  {
+    "id": "S04",
+    "title": "Hold for a human",
+    "say": "The third outcome. An attended call waits for a human with a one-shot code. An unattended call is refused at once with a reference and an expiry, and an approval lets the agent's exact retry through once."
+  },
+  {
+    "id": "S05",
+    "title": "Record",
+    "say": "Every decision and answer lands in the decision buffer and in a hash-chained, append-only audit trail you can verify."
+  },
+  {
+    "id": "S06",
+    "title": "Scope layers",
+    "say": "Ping release claim, unverified: four layered scope checks read the verified token before any rule: surface, application, action, end user. The first layer that fails refuses the call."
+  }
+]

@@ -1,0 +1,31 @@
+{
+  "name": "agent-gateway-inspector-lab",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Inspector for an AI/agent gateway (PingOne Privilege) that allows, denies or pauses agent tool calls. Driven by an in-process stub gateway; nothing real is touched. Mock mode only: Live is refused (the simulated Ping release is not on our tenant).",
+  "license": "MIT",
+  "workspaces": [
+    "server",
+    "web"
+  ],
+  "engines": {
+    "node": ">=26"
+  },
+  "scripts": {
+    "start": "npm start -w server",
+    "dev": "npm run dev -w web",
+    "test": "npm test -w server && npm test -w web && node --test scripts/*.test.mjs",
+    "build": "npm run build -w web",
+    "doctor": "node scripts/doctor.mjs",
+    "reset": "node scripts/reset.mjs",
+    "prepare": "git config core.hooksPath .githooks || true",
+    "smoke": "node scripts/smoke.mjs",
+    "e2e": "node scripts/e2e.mjs",
+    "content-pack": "node scripts/build-content-pack.mjs && node scripts/validate-content-pack.mjs"
+  },
+  "devDependencies": {
+    "ajv": "^8.20.0",
+    "playwright": "^1.64.1"
+  }
+}

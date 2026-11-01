@@ -1,0 +1,258 @@
+{
+  "schema": "diagram-studio/1",
+  "id": "gateway-flow",
+  "title": "Agent tool call through the gateway",
+  "lede": "Agent, four scope layers, gateway policy, upstream tool, human approver, decision buffer and audit trail. Ping release claim (2026-11-02), UNVERIFIED on our tenant. Simulated.",
+  "groups": {
+    "caller": {
+      "label": "Caller",
+      "color": "dark"
+    },
+    "gateway": {
+      "label": "Gateway",
+      "color": "red"
+    },
+    "upstream": {
+      "label": "Upstream",
+      "color": "grey"
+    },
+    "human": {
+      "label": "Human",
+      "color": "blue"
+    },
+    "record": {
+      "label": "Record",
+      "color": "grey"
+    }
+  },
+  "nodes": [
+    {
+      "id": "agent",
+      "label": "Agent",
+      "group": "caller",
+      "sub": [
+        "scripted caller"
+      ],
+      "x": 0,
+      "y": 110
+    },
+    {
+      "id": "layers",
+      "label": "Four scope layers",
+      "group": "gateway",
+      "sub": [
+        "surface, application, action, end user"
+      ],
+      "x": 300,
+      "y": 110
+    },
+    {
+      "id": "gateway",
+      "label": "Gateway policy",
+      "group": "gateway",
+      "sub": [
+        "deny by default"
+      ],
+      "x": 600,
+      "y": 110
+    },
+    {
+      "id": "upstream",
+      "label": "Upstream tool",
+      "group": "upstream",
+      "sub": [
+        "stub, loopback only"
+      ],
+      "x": 900,
+      "y": 0
+    },
+    {
+      "id": "human",
+      "label": "Human approver",
+      "group": "human",
+      "sub": [
+        "code or exact-call approval"
+      ],
+      "x": 900,
+      "y": 220
+    },
+    {
+      "id": "buffer",
+      "label": "Decision buffer",
+      "group": "record",
+      "sub": [
+        "last 200 calls"
+      ],
+      "x": 460,
+      "y": 330
+    },
+    {
+      "id": "audit",
+      "label": "Audit trail",
+      "group": "record",
+      "sub": [
+        "append-only, chained"
+      ],
+      "x": 740,
+      "y": 330
+    }
+  ],
+  "edges": [
+    {
+      "source": "agent",
+      "target": "layers",
+      "label": "token",
+      "ports": [
+        "r",
+        "l"
+      ]
+    },
+    {
+      "source": "layers",
+      "target": "gateway",
+      "label": "pass",
+      "ports": [
+        "r",
+        "l"
+      ]
+    },
+    {
+      "source": "gateway",
+      "target": "upstream",
+      "label": "allow",
+      "ports": [
+        "r",
+        "l"
+      ]
+    },
+    {
+      "source": "gateway",
+      "target": "human",
+      "label": "hold",
+      "ports": [
+        "r",
+        "l"
+      ]
+    },
+    {
+      "source": "human",
+      "target": "upstream",
+      "label": "approve",
+      "ports": [
+        "tout",
+        "bin"
+      ]
+    },
+    {
+      "source": "gateway",
+      "target": "buffer",
+      "label": "record",
+      "ports": [
+        "bout",
+        "tin"
+      ]
+    },
+    {
+      "source": "gateway",
+      "target": "audit",
+      "label": "append",
+      "ports": [
+        "bout",
+        "tin"
+      ]
+    }
+  ],
+  "steps": [
+    {
+      "title": "Call",
+      "what": "A scripted agent asks for a tool. It cannot choose a URL or a port, and it carries no scopes of its own.",
+      "nodes": [
+        "agent",
+        "layers"
+      ],
+      "edges": [
+        0
+      ],
+      "story": {
+        "id": "S01",
+        "step": 1
+      }
+    },
+    {
+      "title": "Scope layers",
+      "what": "Ping release claim, unverified: four layered scope checks read the verified token before any rule: surface, application, action, end user. The first layer that fails refuses the call.",
+      "nodes": [
+        "layers",
+        "gateway"
+      ],
+      "edges": [
+        1
+      ],
+      "story": {
+        "id": "S06",
+        "step": 1
+      }
+    },
+    {
+      "title": "Decide",
+      "what": "After the scope layers, the gateway checks the rate, then the rules. Deny beats hold beats allow, no match means deny, and an evaluation error denies.",
+      "nodes": [
+        "gateway"
+      ],
+      "edges": [],
+      "story": {
+        "id": "S02",
+        "step": 1
+      }
+    },
+    {
+      "title": "Forward",
+      "what": "Only an allowed call reaches a stub tool server on loopback. A denied or held call never does.",
+      "nodes": [
+        "gateway",
+        "upstream"
+      ],
+      "edges": [
+        2
+      ],
+      "story": {
+        "id": "S03",
+        "step": 1
+      }
+    },
+    {
+      "title": "Hold for a human",
+      "what": "The third outcome. An attended call waits for a human with a one-shot code. An unattended call is refused at once with a reference and an expiry, and an approval lets the agent's exact retry through once.",
+      "nodes": [
+        "gateway",
+        "human",
+        "upstream"
+      ],
+      "edges": [
+        3,
+        4
+      ],
+      "story": {
+        "id": "S04",
+        "step": 1
+      }
+    },
+    {
+      "title": "Record",
+      "what": "Every decision and answer lands in the decision buffer and in a hash-chained, append-only audit trail you can verify.",
+      "nodes": [
+        "gateway",
+        "buffer",
+        "audit"
+      ],
+      "edges": [
+        5,
+        6
+      ],
+      "story": {
+        "id": "S05",
+        "step": 1
+      }
+    }
+  ]
+}

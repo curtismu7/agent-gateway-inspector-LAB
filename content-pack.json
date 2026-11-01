@@ -1,0 +1,259 @@
+{
+  "schema": "demo-content-pack/1",
+  "id": "agent-gateway-inspector",
+  "title": "Agent Gateway Inspector LAB",
+  "version": "0.2.0",
+  "demo": {
+    "id": "agent-gateway-inspector",
+    "name": "Agent Gateway Inspector LAB",
+    "catalog": "D54",
+    "baseUrl": "http://localhost:5850",
+    "doctor": "/api/health",
+    "tags": [
+      "agent-gateway",
+      "allow-deny-pause",
+      "human-in-the-loop",
+      "audit",
+      "scope-layers",
+      "hold-for-human"
+    ]
+  },
+  "glossary": [
+    {
+      "id": "agent-gateway",
+      "term": "Agent gateway",
+      "definition": "A policy point between an AI agent and the tools it calls. Every tool call goes through it, and it decides allow, deny or pause before anything reaches the tool. Here it is a stub inside the server process, not a real product.",
+      "aliases": [
+        "AI gateway"
+      ]
+    },
+    {
+      "id": "allow-deny-pause",
+      "term": "Allow, deny, pause",
+      "definition": "The three decisions. Allow forwards the call to a stub tool server. Deny blocks it and never forwards it. Pause is the third outcome, shown as hold for a human: an attended call waits for a human, an unattended one is refused at once with a reference, and either expires after 30 seconds if nobody answers. When rules disagree the strongest wins: deny, then pause, then allow."
+    },
+    {
+      "id": "audit-trail",
+      "term": "Audit trail",
+      "definition": "An append-only record of every decision and answer. Each entry carries an HMAC-SHA256 hash of its content and the previous entry's hash, so changing or removing an entry breaks the chain. The API can read and verify the trail but cannot write to it; only the operator's Reset starts a new one.",
+      "aliases": [
+        "hash chain"
+      ]
+    },
+    {
+      "id": "decision-buffer",
+      "term": "Decision buffer",
+      "definition": "A bounded list of the 200 most recent call records, with the decision, the reason, the rule that matched and the outcome. A polling cursor returns only what changed since the last read."
+    },
+    {
+      "id": "default-deny",
+      "term": "Deny by default",
+      "definition": "If no rule allows a call it is denied. An unknown agent, an unknown tool, bad arguments, an invalid token, a failed scope layer, a spent rate limit and an evaluation error are denied before any rule can allow it, and no rule can grant a scope the agent does not hold."
+    },
+    {
+      "id": "fail-closed",
+      "term": "Fail closed",
+      "definition": "If the policy cannot be evaluated, or answers with anything other than allow, deny or pause, the call is denied. An error never lets a call through."
+    },
+    {
+      "id": "hold-for-human",
+      "term": "Hold for a human",
+      "definition": "Ping release claim (2026-11-02), UNVERIFIED on our tenant. The third outcome. The call is neither allowed nor denied outright. If a human is in the session (attended) the call waits for them. If not (unattended) the gateway keeps no connection open: it refuses at once with a reference and an expiry, and the agent retries after a human approves. The attended or unattended claim comes from the token. The name is lab-invented."
+    },
+    {
+      "id": "inert-text",
+      "term": "Inert text",
+      "definition": "Every string an agent or a tool server supplies is treated as data: hidden characters are shown as [U+XXXX], sizes are bounded, the UI renders it as a text node and never as HTML, and nothing in it is evaluated or followed."
+    },
+    {
+      "id": "mock-mode",
+      "term": "Mock mode",
+      "definition": "The only mode that runs. The header has a Mock/Live toggle and shows the mode, but Live is refused. Scripted agents call three stub tool servers on loopback ports 5851-5853 inside the same process. There is no real gateway, tenant or network beyond 127.0.0.1, and Live is refused: the four scope layers and the hold outcome have no live path until the Ping release is on our tenant."
+    },
+    {
+      "id": "one-shot-code",
+      "term": "One-shot approval code",
+      "definition": "A random code made when a call is held. It is the human's answer channel in this demo: the approver sends it in the JSON body of the decision. The first correct use consumes it, three wrong codes lock the call, and it stops working when the hold expires. The page reads it from the server and never prints it. It is not the approval an unattended agent presents; that is the single-use approval."
+    },
+    {
+      "id": "ping-release-claim",
+      "term": "Ping release claim",
+      "definition": "Everything about the four scope layers, the hold outcome and single-use approvals comes from Ping's release dated 2026-11-02 (deck slide 52). It is UNVERIFIED on our tenant, where the gateway is an earlier version. This app simulates it and has no live mode."
+    },
+    {
+      "id": "prompt-injection",
+      "term": "Prompt injection in arguments",
+      "definition": "Instruction-like text such as \"ignore previous instructions\" inside a tool argument. The gateway scans every string value and every key at any depth, and denies the call; arguments too large to scan completely are denied too."
+    },
+    {
+      "id": "rate-limit",
+      "term": "Rate limit",
+      "definition": "Each agent may make 5 calls per 10 seconds. Further calls in the window are denied with rate_limited, which the rate-burst scenario shows: five allowed, two denied."
+    },
+    {
+      "id": "redaction",
+      "term": "Redaction",
+      "definition": "Secret-looking strings (keys, tokens, JWTs, cookies, authorization values, URL credentials, PEM blocks) are replaced before they are stored or shown. Any token in the UI is demo data."
+    },
+    {
+      "id": "scope",
+      "term": "Scope",
+      "definition": "The permission an agent must hold to use a tool, for example payments.transfer. The registry grants scopes to agents; a call never carries its own, and a rule cannot add one. A missing scope is denied as scope_exceeded.",
+      "aliases": [
+        "tool scope"
+      ]
+    },
+    {
+      "id": "scope-layers",
+      "term": "Four scope layers",
+      "definition": "Ping release claim (2026-11-02), UNVERIFIED on our tenant. Four checks read from the verified token, in order, before any rule: surface (is the token valid on the surface the call arrived on), application (is its application registered for the tool), action (does the agent hold the tool's scope) and end user (does the user the token acts for hold it). The first that fails refuses the call and the later ones are not reached. The names are lab-invented: the console swagger has no field for them."
+    },
+    {
+      "id": "single-use-approval",
+      "term": "Single-use approval",
+      "definition": "Ping release claim (2026-11-02), UNVERIFIED on our tenant. A human approves a reference, not a call to be forwarded. The approval is bound to a hash of the exact call (agent, tool, token and every argument), works once, and expires. A changed argument, another agent, an expired approval or a second replay is refused. It is an input to the policy, never a bypass: the retry is evaluated like any call. Field names reuse the console swagger (ConsumedAt, ConsumedByRequestID, ExpiresAt, FieldHash, GrantTTLSec, RequestID; schema only, 2026-10-31); how they behave here is a lab reading."
+    }
+  ],
+  "sources": [],
+  "cards": [
+    {
+      "id": "approval",
+      "label": "Approve or deny a paused call",
+      "description": "Hold a paused call, answer it with the one-shot code, then verify the audit chain.",
+      "group": "try-it",
+      "terms": [
+        "one-shot-code",
+        "decision-buffer",
+        "audit-trail"
+      ],
+      "story": "S04",
+      "action": {
+        "type": "route",
+        "href": "/"
+      }
+    },
+    {
+      "id": "calls",
+      "label": "Calls and decisions",
+      "description": "Run a scenario, open a call, and see why the gateway allowed, denied or paused it.",
+      "group": "try-it",
+      "terms": [
+        "allow-deny-pause",
+        "default-deny",
+        "scope",
+        "rate-limit",
+        "prompt-injection",
+        "redaction",
+        "inert-text"
+      ],
+      "story": "S02",
+      "action": {
+        "type": "route",
+        "href": "/"
+      }
+    },
+    {
+      "id": "flow",
+      "label": "Gateway flow",
+      "description": "Agent, gateway policy, upstream tool, human approver, decision buffer and audit trail as a movable diagram with Simulate.",
+      "group": "concept",
+      "terms": [
+        "agent-gateway",
+        "mock-mode"
+      ],
+      "story": "S01",
+      "action": {
+        "type": "route",
+        "href": "/"
+      }
+    },
+    {
+      "id": "hold",
+      "label": "Hold for a human, single-use approval (Ping release claim, unverified)",
+      "description": "Run the unattended hold, approve the reference, let the agent retry the exact call once, then try the replay and the changed argument. Ping release claim (2026-11-02), UNVERIFIED on our tenant.",
+      "group": "try-it",
+      "terms": [
+        "hold-for-human",
+        "single-use-approval",
+        "one-shot-code",
+        "fail-closed"
+      ],
+      "story": "S04",
+      "action": {
+        "type": "route",
+        "href": "/"
+      }
+    },
+    {
+      "id": "scope-layers",
+      "label": "Four scope layers (Ping release claim, unverified)",
+      "description": "Run the surface, application and end-user scenarios and see which of the four scope checks refused the call and which were never reached. Ping release claim (2026-11-02), UNVERIFIED on our tenant.",
+      "group": "try-it",
+      "terms": [
+        "scope-layers",
+        "default-deny",
+        "ping-release-claim"
+      ],
+      "story": "S06",
+      "action": {
+        "type": "route",
+        "href": "/"
+      }
+    },
+    {
+      "id": "why-it-matters",
+      "label": "Why it matters: AI Policies, scope and hold for a human (Ping claims)",
+      "description": "Ping claims (deck slide 52), UNVERIFIED on our tenant. Challenge: authorization sees only a tool name, but the risk is in the amount, counterparty, destination and hour. Technical: four layered scope checks read from the verified token, plus a third outcome that holds for a person; approvals are inputs, never bypasses. Business: high-stakes agent actions become approvable without standing human review, which unblocks unattended agents in regulated processes.",
+      "group": "concept",
+      "terms": [
+        "ping-release-claim",
+        "scope-layers",
+        "hold-for-human"
+      ],
+      "story": "S06",
+      "action": {
+        "type": "route",
+        "href": "/"
+      }
+    }
+  ],
+  "diagrams": [
+    {
+      "id": "flow",
+      "label": "Gateway flow",
+      "href": "/"
+    }
+  ],
+  "stories": [
+    {
+      "id": "S01",
+      "title": "Call",
+      "say": "A scripted agent asks for a tool. It cannot choose a URL or a port, and it carries no scopes of its own."
+    },
+    {
+      "id": "S02",
+      "title": "Decide",
+      "say": "After the scope layers, the gateway checks the rate, then the rules. Deny beats hold beats allow, no match means deny, and an evaluation error denies."
+    },
+    {
+      "id": "S03",
+      "title": "Forward",
+      "say": "Only an allowed call reaches a stub tool server on loopback. A denied or held call never does."
+    },
+    {
+      "id": "S04",
+      "title": "Hold for a human",
+      "say": "The third outcome. An attended call waits for a human with a one-shot code. An unattended call is refused at once with a reference and an expiry, and an approval lets the agent's exact retry through once."
+    },
+    {
+      "id": "S05",
+      "title": "Record",
+      "say": "Every decision and answer lands in the decision buffer and in a hash-chained, append-only audit trail you can verify."
+    },
+    {
+      "id": "S06",
+      "title": "Scope layers",
+      "say": "Ping release claim, unverified: four layered scope checks read the verified token before any rule: surface, application, action, end user. The first layer that fails refuses the call."
+    }
+  ]
+}

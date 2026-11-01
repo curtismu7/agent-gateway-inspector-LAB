@@ -1,0 +1,16 @@
+{
+  "demos": [
+    {
+      "id": "agent-gateway-inspector",
+      "name": "Agent Gateway Inspector LAB",
+      "catalogId": "D54",
+      "kind": "Tester",
+      "description": "Inspector for an AI/agent gateway (PingOne Privilege) that allows, denies or holds agent tool calls for a human, with a decision buffer and a verifiable audit trail. Driven by an in-process stub gateway; nothing real is touched. Mock only: Live is refused.",
+      "url": "http://localhost:5850",
+      "healthPath": "/api/health",
+      "composeFile": "agent-gateway-inspector-LAB/docker-compose.yml",
+      "composeOverlays": [],
+      "notes": "Host-run: npm ci && npm run build && npm start (port 5850; npm run doctor checks it). Or: HOST_PORT=5850 docker compose up --build -d (published on 127.0.0.1 only). Mock mode only, loopback-only, zero outbound calls; the Live toggle is refused. The composeFile is relative to the folder the demo repos sit in."
+    }
+  ]
+}

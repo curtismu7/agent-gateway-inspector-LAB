@@ -1,0 +1,23 @@
+# OrbStack:  HOST_PORT=5850 docker compose up --build -d   ->  http://127.0.0.1:5850/api/health
+# The server binds 0.0.0.0 INSIDE the container (GATEWAY_INSPECTOR_BIND is the opt-in), but the port is published on loopback only.
+# No host mounts, no docker socket, no host network. Do not change the 127.0.0.1 below. HOST_PORT must stay in 5850-5899.
+name: agent-gateway-inspector-lab
+
+services:
+  agent-gateway-inspector-lab:
+    build: .
+    ports:
+      - "127.0.0.1:${HOST_PORT:-5850}:5850"
+    environment:
+      PORT: "5850"
+      GATEWAY_INSPECTOR_BIND: 0.0.0.0
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5850/api/health').then(r=>r.json()).then(j=>process.exit(j.schema==='demo-health/1'&&j.state==='ready'?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      start_period: 5s
+      start_interval: 2s
+      timeout: 5s
+      retries: 3
