@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import ShelfLink from "./components/ShelfLink.jsx";
 import { decide, getAudit, getCall, getCalls, getHealth, getInfo, getScenarios, postReset, retryCall, runScenario, verifyAudit } from "./lib/api.js";
 import { DECISION, ERROR_TEXT, REASON } from "./lib/status.js";
 import CallList from "./components/CallList.jsx";
@@ -195,6 +196,7 @@ export default function App() {
           <button type="button" className="tab" aria-pressed={view === "diagram"} onClick={() => setView("diagram")}>Diagram</button>
         </nav>
         <div className="top__tools">
+            <ShelfLink />
           {!presenter && (
             <div className="seg" role="group" aria-label="Mode">
               <button type="button" aria-pressed={mode === "mock"} onClick={() => selectMode("mock")} data-testid="mode-mock">Mock</button>
