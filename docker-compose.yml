@@ -9,6 +9,7 @@ services:
     ports:
       - "127.0.0.1:${HOST_PORT:-5850}:5850"
     environment:
+      SHELF_URL: ${SHELF_URL:-}
       PORT: "5850"
       GATEWAY_INSPECTOR_BIND: 0.0.0.0
     read_only: true
