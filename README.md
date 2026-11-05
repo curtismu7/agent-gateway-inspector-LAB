@@ -3,7 +3,7 @@
 An inspector for an AI/agent gateway (PingOne Privilege) that allows, denies or pauses (holds for a human) agent tool calls, keeps a decision buffer and a hash-chained audit trail, and is driven by an in-process stub gateway. Nothing real is touched.
 
 Tier: Tester
-Repo: https://github.com/ping-sandbox/agent-gateway-inspector-LAB
+Repo: https://github.com/curtismu7/agent-gateway-inspector-LAB
 Catalog: D54
 
 > **Ping release claim (2026-11-02), UNVERIFIED on our tenant.** The four layered scope checks, the third outcome that holds for a human (attended or unattended), and approvals that work once and are bound to the exact call are what Ping's release is claimed to do (deck slide 52). This app simulates them. The header has a Mock/Live toggle and shows the mode, but **Live is refused**: there is no live gateway to talk to, and the feature has no live path until the release is on our tenant. The banner on every tab, presenter mode included, names the mode and carries this notice. See "The release claim" below for what is a console swagger name and what is lab-invented.
@@ -21,7 +21,7 @@ Product source: the AI-DEMO2 Agent Gateway Inspector page. Only its ideas (allow
 Prerequisites: Node 26 or newer (`.nvmrc` says 26). Docker only for the Docker form.
 
 ```bash
-git clone https://github.com/ping-sandbox/agent-gateway-inspector-LAB.git
+git clone https://github.com/curtismu7/agent-gateway-inspector-LAB.git
 cd agent-gateway-inspector-LAB
 npm ci
 npm run doctor      # node, mode, bind, port range, policy tables, free ports (5850 and the stubs 5851-5853)
