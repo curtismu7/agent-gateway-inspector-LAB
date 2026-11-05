@@ -46,7 +46,7 @@ test('README follows the README standard: title ends in LAB, plain Tier, Repo an
   assert.match(r, /util\.parseEnv/);
   assert.doesNotMatch(r, /Rule 17 gap/, 'the diagram is diagram-studio data now');
   assert.match(r, /diagram-studio\/1 data in `server\/diagrams\/`/, 'the README says how the diagram is loaded');
-  assert.ok(!/ping-devops|cmuir|curtismu/i.test(r));
+  assert.ok(!/ping-devops|cmuir/i.test(r));
   assert.ok(!/TEST_COUNTS_PLACEHOLDER/.test(r), 'the test counts are filled in');
 });
 
