@@ -129,7 +129,7 @@ On Node 26, with the counts from the last run in this repo: 200 server tests (no
 
 ## Ownership
 
-- Owner: the Ping demo-family owner (this repo is part of the `-LAB` family under the `ping-sandbox` organisation).
+- Owner: the Ping demo-family owner (this repo is part of the `-LAB` family under the owner's `curtismu7` account).
 - License: MIT, see `LICENSE`.
 - Found a problem? Open an issue on the repo.
 
