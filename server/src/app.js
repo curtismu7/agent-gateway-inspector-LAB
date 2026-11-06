@@ -8,6 +8,9 @@ import { fileURLToPath } from 'node:url';
 import { createHealth } from './health.js';
 import { DEFAULT_DIAGRAMS_DIR, diagramByName, loadDiagrams } from './diagramData.js';
 import { MODES, liveRefusal, modeFrom } from './config.js';
+
+// The reason the Mock/Real toggle gives for Real: this lab has no live gateway to talk to.
+export const LIVE_REFUSAL = 'Real is not available in this lab: there is no live gateway to talk to (the Ping release it simulates is not on the tenant), so it stays in mock.';
 import { createRuntime } from './runtime.js';
 import { assertBindAllowed, bindHost, credentialGuard, hostGuard, makeOriginGuard, serverPort } from './safety.js';
 import { SCENARIOS, describeScenario, getScenario } from './scenarios.js';
@@ -57,7 +60,19 @@ export function createApp({ runtime, health = createHealth(), webDist = null, en
     let requested = 'mock';
     try { requested = modeFrom(env); } catch { /* the doctor reports it */ }
     const refusal = liveRefusal(env);
-    res.json({ mode: 'mock', requested, modes: MODES, live: refusal ? { available: false, ...refusal } : { available: true } });
+    // Rule 19: what the Mock/Real toggle needs. This lab is mock only, so Real is never available.
+    res.json({
+      mode: 'mock', source: 'mock', requested, modes: MODES, live: refusal ? { available: false, ...refusal } : { available: true },
+      realAvailable: false, realReason: LIVE_REFUSAL,
+    });
+  });
+
+  // Rule 19: the runtime mode is server-side. This lab is mock only, so mock→real is refused 409 and real→mock stays mock.
+  api.post('/mode', (req, res) => {
+    const next = req.body?.source;
+    if (next !== 'mock' && next !== 'real') return bad(res, 'source must be exactly "mock" or "real"');
+    if (next === 'real') return res.status(409).json({ error: 'real_not_available', source: 'mock', realAvailable: false, realReason: LIVE_REFUSAL, message: LIVE_REFUSAL });
+    return res.json({ source: 'mock', realAvailable: false, realReason: LIVE_REFUSAL, message: 'This lab is mock only; the page stays in mock mode.' });
   });
 
   // The flow diagram, as diagram-studio/1 data, by name. Only the names in the allow-list answer; anything else is a plain 404

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import ShelfLink from "./components/ShelfLink.jsx";
-import { decide, getAudit, getCall, getCalls, getHealth, getInfo, getScenarios, postReset, retryCall, runScenario, verifyAudit } from "./lib/api.js";
+import { decide, getAudit, getCall, getCalls, getHealth, getInfo, getScenarios, postMode, postReset, retryCall, runScenario, verifyAudit } from "./lib/api.js";
 import { DECISION, ERROR_TEXT, REASON } from "./lib/status.js";
 import CallList from "./components/CallList.jsx";
 import CallDetail from "./components/CallDetail.jsx";
@@ -168,12 +168,21 @@ export default function App() {
     } catch (e) { setError(`Reset failed: ${e.message}`); } finally { setBusy(false); }
   };
 
-  // Live can be selected only when the server says every live guard passes. None can, so the click shows why and the page stays in mock.
-  const selectMode = (m) => {
-    if (m === "mock") { setMode("mock"); setLiveNote(""); return; }
-    if (info?.live?.available === true) { setMode("live"); setLiveNote(""); return; }
-    setMode("mock");
-    setLiveNote(LIVE_REFUSED);
+  // Rule 19: switching is a server call (POST /api/mode), then the data reloads so every view reflects the mode the
+  // server answered with. This lab is mock only: Real is disabled with the server's reason and the page stays mock.
+  const [modeBusy, setModeBusy] = useState(false);
+  const source = info?.source ?? "mock";
+  const realAvailable = info ? info.realAvailable !== false : false;
+  const realReason = info?.realReason || LIVE_REFUSED;
+  const selectMode = async (m) => {
+    if (modeBusy) return;
+    if (m === "live" && !realAvailable) { setLiveNote(realReason); return; }
+    setModeBusy(true);
+    try {
+      await postMode(m === "live" ? "real" : "mock");
+      setLiveNote("");
+      await refresh();
+    } catch (e) { setLiveNote(e.message || realReason); } finally { setModeBusy(false); }
   };
   // P enters presenter mode and Esc leaves it, unless the key is for a form control. The banner and the mode stay.
   useEffect(() => {
@@ -202,8 +211,8 @@ export default function App() {
             <ShelfLink />
           {!presenter && (
             <div className="seg" role="group" aria-label="Mode">
-              <button type="button" aria-pressed={mode === "mock"} onClick={() => selectMode("mock")} data-testid="mode-mock">Mock</button>
-              <button type="button" aria-pressed={mode === "live"} onClick={() => selectMode("live")} data-testid="mode-live">Live</button>
+              <button type="button" aria-pressed={source === "mock"} onClick={() => selectMode("mock")} data-testid="mode-mock">Mock</button>
+              <button type="button" aria-pressed={source === "real"} disabled={!realAvailable} title={realAvailable ? undefined : realReason} onClick={() => selectMode("live")} data-testid="mode-live">Real</button>
             </div>
           )}
           {!presenter && <button type="button" className="btn" onClick={reset} disabled={busy}>Reset</button>}

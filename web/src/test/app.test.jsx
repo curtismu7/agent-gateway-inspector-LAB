@@ -12,7 +12,12 @@ function fakeApi(opts = {}) {
     const method = init.method || "GET";
     state.requests.push({ url, method, init });
     if (url === "/api/health") return json({ schema: "demo-health/1", state: "ready" });
-    if (url === "/api/info") return json({ mode: "mock", requested: state.requested || "mock", modes: ["mock", "live"], live: { available: false, failed: ["owner-opt-in", "live-gateway"], needs: ["x", "y"] } });
+    if (url === "/api/info") return json({ mode: "mock", source: "mock", requested: state.requested || "mock", modes: ["mock", "live"], live: { available: false, failed: ["owner-opt-in", "live-gateway"], needs: ["x", "y"] }, realAvailable: false, realReason: "Real is not available in this lab: there is no live gateway to talk to (the Ping release it simulates is not on the tenant), so it stays in mock." });
+    if (url === "/api/mode" && method === "POST") {
+      const src = JSON.parse(init.body || "{}").source;
+      if (src === "real") return json({ error: "real_not_available", source: "mock", realAvailable: false, realReason: "Real is not available in this lab.", message: "Real is not available in this lab." }, 409);
+      return json({ source: "mock", realAvailable: false, realReason: "Real is not available in this lab." });
+    }
     if (url === "/api/scenarios") return json({ scenarios: [{ id: "benign", title: "Benign call", description: "d1", agent: "support-bot", steps: 1 }, { id: "paused-approved", title: "Paused, then approved", description: "d2", agent: "finance-agent", steps: 1 }] });
     if (url.startsWith("/api/calls?")) return json({ calls: state.calls, cursor: 1, epoch: 1 });
     if (url === "/api/audit?limit=500") return json({ entries: state.audit, size: state.audit.length, headSeq: state.audit.length });
@@ -43,13 +48,13 @@ function fakeApi(opts = {}) {
 
 afterEach(() => { vi.restoreAllMocks(); });
 
-test("the web client has no call for a mode-switch route: the server has none", async () => {
+test("the web client posts the rule 19 mode route to the server's /api/mode", async () => {
   const api = await import("../lib/api.js");
-  expect(Object.keys(api).filter((k) => /mode/i.test(k))).toEqual([]);
+  expect(Object.keys(api).filter((k) => /mode/i.test(k))).toEqual(["getMode", "postMode"]);
   const fs = await import("node:fs");
   const path = await import("node:path");
   const src = fs.readFileSync(path.resolve(process.cwd(), "src/lib/api.js"), "utf8");
-  expect(src).not.toMatch(/\/api\/mode/);
+  expect(src).toMatch(/\/api\/mode/);
 });
 
 test("the header Reset reaches the diagram: boxes and caption go back to idle after a simulated run", async () => {
@@ -234,12 +239,15 @@ test("the unreachable-API messages go away once the API answers again", async ()
   expect(api.requests.length).toBeGreaterThan(0);
 }, 15000);
 
-test("the header has a Mock/Live toggle that shows the mode, and the banner says the same mode", async () => {
+test("the header has a Mock/Real toggle that shows the mode, and the banner says the same mode", async () => {
   fakeApi();
   render(<App />);
   await screen.findByRole("option", { name: "Benign call" });
   expect(screen.getByTestId("mode-mock")).toHaveAttribute("aria-pressed", "true");
   expect(screen.getByTestId("mode-live")).toHaveAttribute("aria-pressed", "false");
+  // Rule 19: Real is disabled with the server's reason.
+  expect(screen.getByTestId("mode-live")).toBeDisabled();
+  expect(screen.getByTestId("mode-live").getAttribute("title")).toMatch(/no live gateway/);
   expect(screen.getByTestId("mode-badge")).toHaveTextContent("Mode: Mock");
   expect(screen.getByTestId("release-banner")).toHaveTextContent(/^Mock mode\./);
   expect(screen.getByTestId("release-banner")).toHaveAttribute("data-state", "mock");
@@ -248,20 +256,31 @@ test("the header has a Mock/Live toggle that shows the mode, and the banner says
   expect(screen.getByTestId("release-banner")).toHaveTextContent(/^Mock mode\./);
 });
 
-test("Live is refused: the click says why, the page stays in Mock, and no request is made for it", async () => {
+test("Real is refused: Real is disabled so the click does nothing and the page stays in Mock", async () => {
   const api = fakeApi();
   render(<App />);
   await screen.findByRole("option", { name: "Benign call" });
   const before = api.requests.length;
+  // Rule 19: Real is disabled with the reason in its tooltip; a click on a disabled button fires nothing.
   await userEvent.click(screen.getByTestId("mode-live"));
-  expect(screen.getByTestId("live-note")).toHaveTextContent(/Live is refused: this app has no live gateway/);
   expect(screen.getByTestId("mode-live")).toHaveAttribute("aria-pressed", "false");
   expect(screen.getByTestId("mode-mock")).toHaveAttribute("aria-pressed", "true");
   expect(screen.getByTestId("mode-badge")).toHaveTextContent("Mode: Mock");
   expect(screen.getByTestId("release-banner")).toHaveTextContent(/^Mock mode\./);
   expect(api.requests.slice(before).filter((r) => r.method !== "GET")).toEqual([]);
   await userEvent.click(screen.getByTestId("mode-mock"));
-  expect(screen.queryByTestId("live-note")).toBeNull();
+  await waitFor(() => expect(screen.queryByTestId("live-note")).toBeNull());
+});
+
+test("rule 19: mock→mock posts /api/mode, gets the server's answer and the page stays mock", async () => {
+  const api = fakeApi();
+  render(<App />);
+  await screen.findByRole("option", { name: "Benign call" });
+  await userEvent.click(screen.getByTestId("mode-mock"));
+  await waitFor(() => expect(api.requests.some((r) => r.url === "/api/mode" && r.method === "POST")).toBe(true));
+  expect(JSON.parse(api.requests.find((r) => r.url === "/api/mode").init.body)).toEqual({ source: "mock" });
+  expect(screen.getByTestId("mode-badge")).toHaveTextContent("Mode: Mock");
+  expect(screen.getByTestId("release-banner")).toHaveAttribute("data-state", "mock");
 });
 
 test("a settings request for live is shown as refused at load, and the page opens in Mock", async () => {

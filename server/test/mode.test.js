@@ -46,17 +46,32 @@ test('a settings request for live is reported but not obeyed: the effective mode
   assert.deepEqual(res.json.live.failed, ['live-gateway']);
 });
 
-test('every API answer that names a mode says mock, and there is no route that switches the server to live', async (t) => {
+test('every API answer that names a mode says mock, and the only mode-switch route refuses live with 409 (rule 19)', async (t) => {
   const port = await boot(t, { [MODE_KEY]: 'live' });
   assert.equal((await request(port, 'POST', '/api/scenarios/benign/run')).json.mode, 'mock');
   assert.equal((await request(port, 'GET', '/api/calls')).json.mode, 'mock');
   assert.equal((await request(port, 'GET', '/api/audit/verify')).json.mode, 'mock');
-  for (const m of ['POST', 'PUT', 'PATCH']) {
+  // Rule 19: the toggle route exists, takes exactly {source}, and refuses mock→real with 409 and a clear reason.
+  const refused = await request(port, 'POST', '/api/mode', { body: { source: 'real' } });
+  assert.equal(refused.status, 409);
+  assert.equal(refused.json.error, 'real_not_available');
+  assert.equal(refused.json.realAvailable, false);
+  assert.match(refused.json.realReason, /not available/i);
+  const stay = await request(port, 'POST', '/api/mode', { body: { source: 'mock' } });
+  assert.equal(stay.status, 200);
+  assert.equal(stay.json.source, 'mock');
+  assert.equal((await request(port, 'POST', '/api/mode', { body: { source: 'live' } })).status, 400);
+  assert.equal((await request(port, 'POST', '/api/mode', { body: {} })).status, 400);
+  for (const m of ['PUT', 'PATCH']) {
     const res = await request(port, m, '/api/mode', { body: { mode: 'live' } });
     assert.equal(res.status, 404, `${m} /api/mode`);
   }
   assert.equal((await request(port, 'POST', '/api/info', { body: { mode: 'live' } })).status, 404);
   assert.equal((await request(port, 'GET', '/api/info')).json.mode, 'mock');
+  const info = (await request(port, 'GET', '/api/info')).json;
+  assert.equal(info.source, 'mock');
+  assert.equal(info.realAvailable, false);
+  assert.match(info.realReason, /not available/i);
 });
 
 test('the live guards: owner opt-in, loopback bind and a live gateway; the last one never passes, so live is refused whatever is set', () => {
