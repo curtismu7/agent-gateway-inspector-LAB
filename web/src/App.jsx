@@ -9,8 +9,10 @@ import Flow from "./components/Flow.jsx";
 import Story from "./components/Story.jsx";
 
 const safe = (fn, fallback) => { try { return fn(); } catch { return fallback; } };
-const initialTheme = () => safe(() => localStorage.getItem("agi-theme"), null)
-  || (safe(() => window.matchMedia("(prefers-color-scheme: dark)").matches, false) ? "dark" : "light");
+const initialTheme = () => {
+  const t = safe(() => localStorage.getItem("agi-theme"), null);
+  return ["auto", "light", "dark"].includes(t) ? t : "auto";
+};
 const POLL_MS = 2000;
 const count = (calls, d) => calls.filter((c) => c.decision === d).length;
 
@@ -59,7 +61,8 @@ export default function App() {
   healthRef.current = health;
 
   useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
+    if (theme === "auto") document.documentElement.removeAttribute("data-theme");
+    else document.documentElement.setAttribute("data-theme", theme);
     safe(() => localStorage.setItem("agi-theme", theme));
   }, [theme]);
 
@@ -183,7 +186,7 @@ export default function App() {
     return () => window.removeEventListener("keydown", on);
   }, []);
 
-  const dark = theme === "dark";
+  const setThemePersist = (t) => { setTheme(t); safe(() => localStorage.setItem("agi-theme", t)); };
   const scenario = scenarios.find((s) => s.id === scenarioId);
   return (
     <div className="app" data-presenter={presenter ? "on" : undefined}>
@@ -205,7 +208,13 @@ export default function App() {
           )}
           {!presenter && <button type="button" className="btn" onClick={reset} disabled={busy}>Reset</button>}
           <button type="button" className="btn" aria-pressed={presenter} onClick={() => setPresenter((v) => !v)} title="P to enter, Esc to leave">{presenter ? "Exit presenter" : "Presenter"}</button>
-          {!presenter && <button type="button" className="btn" onClick={() => setTheme(dark ? "light" : "dark")} aria-label={`Switch to ${dark ? "light" : "dark"} theme`}>{dark ? "Light" : "Dark"}</button>}
+          {!presenter && <label className="inline">Theme
+            <select value={theme} onChange={(e) => setThemePersist(e.target.value)} data-testid="theme">
+              <option value="auto">Auto</option>
+              <option value="light">Light</option>
+              <option value="dark">Dark</option>
+            </select>
+          </label>}
         </div>
       </header>
       <ReleaseBanner mode={mode} />

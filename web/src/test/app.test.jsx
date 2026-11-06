@@ -137,7 +137,7 @@ test("the theme toggle sets data-theme and every request is same-origin and cred
   const api = fakeApi();
   render(<App />);
   await screen.findByRole("option", { name: "Benign call" });
-  await userEvent.click(screen.getByRole("button", { name: /Switch to (dark|light) theme/ }));
+  await userEvent.selectOptions(screen.getByTestId("theme"), "dark");
   expect(["dark", "light"]).toContain(document.documentElement.dataset.theme);
   await userEvent.click(screen.getByRole("button", { name: "Run" }));
   await screen.findByText(/Ran "Benign call"/);
