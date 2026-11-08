@@ -213,3 +213,14 @@ test('a 500 never leaks err.message or a stack', async (t) => {
   assert.deepEqual(res.json, { error: 'server_error' });
   assert.doesNotMatch(res.raw, /SECRET|Users|at /);
 });
+
+test('GET /api/shelf is reachable without a web build and reads SHELF_URL; POST is refused', async (t) => {
+  const prev = process.env.SHELF_URL;
+  process.env.SHELF_URL = 'https://shelf.example:8443/';
+  t.after(() => { if (prev === undefined) delete process.env.SHELF_URL; else process.env.SHELF_URL = prev; });
+  const { port } = await boot(t);
+  const res = await request(port, 'GET', '/api/shelf');
+  assert.equal(res.status, 200);
+  assert.deepEqual(res.json, { shelfUrl: 'https://shelf.example:8443' });
+  assert.notEqual((await request(port, 'POST', '/api/shelf')).status, 200);
+});

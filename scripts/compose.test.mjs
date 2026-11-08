@@ -70,3 +70,7 @@ test('compose keeps no-new-privileges, and the container port setting is the pub
   assert.ok(code.includes(`127.0.0.1:${n}/api/health`), 'the healthcheck uses the same port');
   assert.deepEqual([...df.matchAll(/^EXPOSE\s+(\d+)/gm)].map((m) => Number(m[1])), [n]);
 });
+
+test('compose passes a usable SHELF_URL so the header Shelf button shows in Docker', () => {
+  assert.match(code, /SHELF_URL:\s*\$\{SHELF_URL:-http:\/\/127\.0\.0\.1:4400\}/);
+});
