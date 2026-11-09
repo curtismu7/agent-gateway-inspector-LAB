@@ -165,7 +165,7 @@ try {
   await shot('4-audit-tamper-light');
 
   // Dark theme + diagram
-  await page.getByRole('button', { name: /Switch to dark theme/ }).click();
+  await page.getByTestId('theme').selectOption('dark');
   check((await page.evaluate(() => document.documentElement.dataset.theme)) === 'dark', 'theme toggles to dark');
   await shot('5-inspector-dark');
   await page.getByRole('button', { name: 'Diagram' }).click();
@@ -179,6 +179,7 @@ try {
     return boxes.length === 7 && boxes.every((b, i) => boxes.every((c, j) => i === j || !hit(b, c)) && nodes.every((n) => !hit(b, n)));
   }), 'edge labels overlap neither each other nor a box');
   const node = page.locator('.react-flow__node', { hasText: 'Audit trail' }).first();
+  await node.scrollIntoViewIfNeeded(); // the Diagram tab's release banner pushes the bottom row below a 900px fold
   const before = await node.boundingBox();
   await page.mouse.move(before.x + before.width / 2, before.y + before.height / 2);
   await page.mouse.down(); await page.mouse.move(before.x + before.width / 2 + 60, before.y + before.height / 2 + 30, { steps: 6 }); await page.mouse.up();
@@ -189,7 +190,7 @@ try {
   const callsBefore = (await (await fetch(`${base}/api/calls`)).json()).calls.length;
   await page.getByRole('button', { name: 'Simulate' }).click();
   await page.getByTestId('caption').filter({ hasText: 'Step 1 of 6' }).waitFor();
-  check((await page.locator('.fbox.on').count()) > 0, 'Simulate highlights boxes');
+  check((await page.locator('.fbox[data-on="true"]').count()) > 0, 'Simulate highlights boxes');
   await page.getByTestId('caption').filter({ hasText: 'Step 6 of 6' }).waitFor({ timeout: 10000 });
   const cap = await page.getByTestId('caption').innerText();
   check(/audit trail/i.test(cap), `final step reflects the real run: "${cap}"`);
@@ -197,8 +198,8 @@ try {
   check(callsAfter === callsBefore + 1, 'Simulate drove a real scenario run on the server');
   await shot('6-diagram-dark');
   await page.getByRole('button', { name: 'Reset diagram' }).click();
-  check((await page.getByTestId('caption').innerText()).includes('Press Simulate') && (await page.locator('.fbox.on').count()) === 0, 'diagram Reset clears the highlight');
-  await page.getByRole('button', { name: /Switch to light theme/ }).click();
+  check((await page.getByTestId('caption').innerText()).includes('Press Simulate') && (await page.locator('.fbox[data-on="true"]').count()) === 0, 'diagram Reset clears the highlight');
+  await page.getByTestId('theme').selectOption('light');
   await shot('7-diagram-light');
 
   // Reset

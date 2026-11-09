@@ -82,3 +82,28 @@ jobs:
           ./gitleaks version
       - name: Scan history
         run: ./gitleaks detect --source . --redact --no-banner
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 26
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - run: npm run e2e
+        env:
+          E2E_SHOTS: ${{ runner.temp }}/e2e-screenshots
+      - name: Screenshots (on failure)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-screenshots
+          path: |
+            ${{ runner.temp }}/e2e-screenshots
+            .data/e2e-screenshots
+            e2e-output
+          retention-days: 7
