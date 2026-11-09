@@ -104,7 +104,8 @@ test('no shipped text names a real customer, company or tenant, and uses no reti
       const p = path.join(dir, name);
       if (fs.statSync(p).isDirectory()) walk(p);
       else if (!/(repo|docs|content-pack|shelf-entry)\.test\.mjs$/.test(p)) {
-        const t = fs.readFileSync(p, 'utf8');
+        // The family lab-proxy's public names (rulebook: labs are reached at local.ping-devops.com:8443) are allowed; any other ping-devops name is not.
+        const t = fs.readFileSync(p, 'utf8').replace(/(?:agent-gateway-inspector\.)?local\.ping-devops\.com/gi, '');
         for (const w of ['united airlines', 'mileageplus', 'datapower', 'optum', 'unitedhealth', 'uhg', 'personal-agent', 'ping-devops', 'amazonaws.com']) if (t.toLowerCase().includes(w)) hits.push(`${path.relative(root, p)}: ${w}`);
         if (/\.(md|json)$/.test(name) && retired.test(t)) hits.push(`${path.relative(root, p)}: retired wording`);
       }

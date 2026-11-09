@@ -159,3 +159,46 @@ test('API responses are never cached and send no referrer', async (t) => {
   assert.equal(res.headers['referrer-policy'], 'no-referrer');
   assert.equal(res.headers['x-content-type-options'], 'nosniff');
 });
+
+// Behind the family lab-proxy (https://local.ping-devops.com:8443): Host is this lab's LAB_ALLOWED_HOSTS name with its port,
+// the browser's Origin is the proxy's, and the proxy says so in X-Forwarded-Host/-Proto.
+test('lab-proxy: launcher Host accepted, proxied same-origin write accepted, everything else still refused', async (t) => {
+  const { parseAllowedHosts } = await import('../src/safety.js');
+  assert.deepEqual([...parseAllowedHosts({})], []);
+  assert.deepEqual([...parseAllowedHosts({ LAB_ALLOWED_HOSTS: ' Agent-Gateway-Inspector.local.ping-devops.com , ' })], ['agent-gateway-inspector.local.ping-devops.com']);
+  for (const bad of ['a.example:5850', 'https://a.example', 'a b']) assert.throws(() => parseAllowedHosts({ LAB_ALLOWED_HOSTS: bad }), /not a host name/);
+  const name = 'agent-gateway-inspector.local.ping-devops.com';
+  const base = await freeBase('guards', 4);
+  const clock = fakeClock();
+  const rt = await createRuntime({ stubBase: base, now: clock.now, sleep: async (ms) => clock.advance(ms), upstreamTimeoutMs: 30_000 });
+  const health = createHealth();
+  const port = base + 3;
+  const server = createApp({ runtime: rt, health, allowedHosts: parseAllowedHosts({ LAB_ALLOWED_HOSTS: name }), port }).listen(port, '127.0.0.1');
+  await new Promise((r) => server.once('listening', r));
+  t.after(async () => { health.stop(); server.closeAllConnections(); await new Promise((r) => server.close(r)); await rt.close(); });
+  const proxy = 'https://local.ping-devops.com:8443';
+  const fwd = { 'x-forwarded-host': 'local.ping-devops.com:8443', 'x-forwarded-proto': 'https' };
+  // launcher Host accepted (and loopback still is)
+  assert.equal((await request(port, 'GET', '/api/health', { host: `${name}:${port}` })).status, 200);
+  assert.equal((await request(port, 'GET', '/api/health', { host: `127.0.0.1:${port}` })).status, 200);
+  // proxied same-origin write accepted
+  const ok = await request(port, 'POST', '/api/reset', { host: `${name}:${port}`, headers: { ...fwd, origin: proxy }, body: {} });
+  assert.equal(ok.status, 200, ok.raw);
+  // foreign Origin refused, and an Origin that does not match the forwarded host or scheme
+  for (const origin of ['https://evil.example', 'http://local.ping-devops.com:8443', 'https://local.ping-devops.com']) {
+    const res = await request(port, 'POST', '/api/reset', { host: `${name}:${port}`, headers: { ...fwd, origin }, body: {} });
+    assert.equal(res.status, 403, origin);
+    assert.equal(res.json.error, 'bad_origin');
+  }
+  assert.equal((await request(port, 'POST', '/api/reset', { host: `${name}:${port}`, headers: { 'x-forwarded-host': 'local.ping-devops.com:8443', 'x-forwarded-proto': 'ftp', origin: 'ftp://local.ping-devops.com:8443' }, body: {} })).status, 403);
+  assert.equal((await request(port, 'POST', '/api/reset', { host: `${name}:${port}`, headers: { 'x-forwarded-host': '', 'x-forwarded-proto': 'https', origin: 'https://' }, body: {} })).status, 403);
+  // forwarded headers on a loopback Host are ignored
+  for (const host of [`127.0.0.1:${port}`, `localhost:${port}`]) {
+    assert.equal((await request(port, 'POST', '/api/reset', { host, headers: { ...fwd, origin: proxy }, body: {} })).status, 403, host);
+  }
+  // a Host outside the set is refused: the bare proxy name, another name, the right name on another port, no port
+  for (const host of [`local.ping-devops.com:${port}`, 'local.ping-devops.com:8443', `evil.example:${port}`, `${name}:${port + 1}`, name]) {
+    assert.equal((await request(port, 'GET', '/api/health', { host })).status, 421, host);
+    assert.equal((await request(port, 'POST', '/api/reset', { host, headers: { ...fwd, origin: proxy }, body: {} })).status, 421, host);
+  }
+});
