@@ -74,3 +74,9 @@ test('compose keeps no-new-privileges, and the container port setting is the pub
 test('compose passes a usable SHELF_URL so the header Shelf button shows in Docker', () => {
   assert.match(code, /SHELF_URL:\s*\$\{SHELF_URL:-http:\/\/127\.0\.0\.1:4400\}/);
 });
+
+test('docker-compose.yml allows the lab-proxy name for this lab by default, never the bare proxy name', () => {
+  const m = /LAB_ALLOWED_HOSTS: \$\{LAB_ALLOWED_HOSTS:-([^}]*)\}/.exec(compose);
+  assert.ok(m, 'LAB_ALLOWED_HOSTS has a default');
+  assert.deepEqual(m[1].split(',').map((n) => n.trim()), ['agent-gateway-inspector.local.ping-devops.com']);
+});

@@ -12,7 +12,7 @@ import { MODES, liveRefusal, modeFrom } from './config.js';
 // The reason the Mock/Real toggle gives for Real: this lab has no live gateway to talk to.
 export const LIVE_REFUSAL = 'Real is not available in this lab: there is no live gateway to talk to (the Ping release it simulates is not on the tenant), so it stays in mock.';
 import { createRuntime } from './runtime.js';
-import { assertBindAllowed, bindHost, credentialGuard, hostGuard, makeOriginGuard, serverPort } from './safety.js';
+import { assertBindAllowed, bindHost, credentialGuard, makeHostGuard, makeOriginGuard, parseAllowedHosts, serverPort } from './safety.js';
 import { SCENARIOS, describeScenario, getScenario } from './scenarios.js';
 import { shelfInfo } from './shelfLink.js';
 
@@ -32,13 +32,13 @@ const methods = (allow) => (_req, res) => res.set('Allow', allow).status(405).js
 // serving; startHttpServer passes DEFAULT_WEB_DIST. A missing directory serves a JSON 404 at /.
 // env: where the default mode comes from (GATEWAY_INSPECTOR_MODE). The mode is always mock: GET /api/info says so and says why live is refused.
 // diagramsDir: the diagram-studio/1 files (server/diagrams). They are read and validated here, so a bad file stops the server from starting.
-export function createApp({ runtime, health = createHealth(), webDist = null, env = process.env, diagramsDir = DEFAULT_DIAGRAMS_DIR } = {}) {
+export function createApp({ runtime, health = createHealth(), webDist = null, env = process.env, diagramsDir = DEFAULT_DIAGRAMS_DIR, allowedHosts = parseAllowedHosts(env), port = serverPort(env) } = {}) {
   const diagrams = loadDiagrams(diagramsDir);
   const app = express();
   app.disable('x-powered-by');
-  app.use(hostGuard);
+  app.use(makeHostGuard({ allowed: allowedHosts, port }));
   app.use(credentialGuard); // every route, static files included
-  app.use(makeOriginGuard());
+  app.use(makeOriginGuard({ allowed: allowedHosts, port }));
   app.use((_req, res, next) => { res.set(API_HEADERS); next(); });
   if (webDist && fs.existsSync(path.join(webDist, 'index.html'))) {
     app.use(express.static(webDist, {
@@ -160,12 +160,13 @@ export function createApp({ runtime, health = createHealth(), webDist = null, en
 // Boot on `port`. Refuses a non-loopback host unless GATEWAY_INSPECTOR_BIND is set.
 export async function startHttpServer({ port = serverPort(), host = bindHost(), env = process.env, runtime, webDist = DEFAULT_WEB_DIST, diagramsDir = DEFAULT_DIAGRAMS_DIR } = {}) {
   modeFrom(env);
+  const allowedHosts = parseAllowedHosts(env); // the lab-proxy's names; before any server or timer starts
   assertBindAllowed(host, env);
   loadDiagrams(diagramsDir); // a bad diagram file refuses the start, before anything is opened
   const rt = runtime || await createRuntime();
   const health = createHealth({ env });
   return new Promise((resolve, reject) => {
-    const httpServer = createApp({ runtime: rt, health, webDist, env, diagramsDir }).listen(port, host);
+    const httpServer = createApp({ runtime: rt, health, webDist, env, diagramsDir, allowedHosts, port }).listen(port, host);
     httpServer.once('error', async (e) => { health.stop(); await rt.close(); reject(e); });
     httpServer.once('listening', () => {
       const { port: bound } = httpServer.address();
