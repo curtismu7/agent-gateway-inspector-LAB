@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import ShelfLink from "./components/ShelfLink.jsx";
+import TopMenu, { applyFontSize } from "./top-menu/TopMenu.jsx";
 import { decide, getAudit, getCall, getCalls, getHealth, getInfo, getScenarios, postMode, postReset, retryCall, runScenario, verifyAudit } from "./lib/api.js";
 import { DECISION, ERROR_TEXT, REASON } from "./lib/status.js";
 import CallList from "./components/CallList.jsx";
@@ -13,6 +14,7 @@ const initialTheme = () => {
   const t = safe(() => localStorage.getItem("agi-theme"), null);
   return ["auto", "light", "dark"].includes(t) ? t : "auto";
 };
+const initialFont = () => { const f = safe(() => localStorage.getItem("agi.font"), null); return ["S", "M", "L"].includes(f) ? f : "M"; };
 const POLL_MS = 2000;
 const count = (calls, d) => calls.filter((c) => c.decision === d).length;
 
@@ -32,6 +34,7 @@ function ReleaseBanner({ mode }) {
 
 export default function App() {
   const [theme, setTheme] = useState(initialTheme);
+  const [fontStep, setFontStep] = useState(initialFont);
   const [mode, setMode] = useState("mock"); // mock until the server says live can be selected; it never does
   const [info, setInfo] = useState(null);
   const [liveNote, setLiveNote] = useState("");
@@ -65,6 +68,11 @@ export default function App() {
     else document.documentElement.setAttribute("data-theme", theme);
     safe(() => localStorage.setItem("agi-theme", theme));
   }, [theme]);
+
+  useEffect(() => {
+    applyFontSize(fontStep);
+    safe(() => localStorage.setItem("agi.font", fontStep));
+  }, [fontStep]);
 
   const refresh = useCallback(async () => {
     try {
@@ -208,22 +216,17 @@ export default function App() {
           <button type="button" className="tab" aria-pressed={view === "diagram"} onClick={() => setView("diagram")}>Diagram</button>
         </nav>
         <div className="top__tools">
+          <TopMenu
+            mode={presenter ? undefined : { value: source === "real" ? "real" : "mock", onChange: selectMode, realAvailable, realHint: realReason }}
+            theme={presenter ? undefined : { value: theme, onChange: setThemePersist }}
+            fontSize={{ value: fontStep, onChange: setFontStep }}
+            present={{ active: presenter, onToggle: () => setPresenter((v) => !v), label: "Presenter" }}
+            help={{ href: "https://github.com/curtismu7/agent-gateway-inspector-LAB#readme" }}
+            version={info?.version || null}
+            onReset={presenter ? undefined : reset}
+          >
             <ShelfLink />
-          {!presenter && (
-            <div className="seg" role="group" aria-label="Mode">
-              <button type="button" aria-pressed={source === "mock"} onClick={() => selectMode("mock")} data-testid="mode-mock">Mock</button>
-              <button type="button" aria-pressed={source === "real"} disabled={!realAvailable} title={realAvailable ? undefined : realReason} onClick={() => selectMode("live")} data-testid="mode-live">Real</button>
-            </div>
-          )}
-          {!presenter && <button type="button" className="btn" onClick={reset} disabled={busy}>Reset</button>}
-          <button type="button" className="btn" aria-pressed={presenter} onClick={() => setPresenter((v) => !v)} title="P to enter, Esc to leave">{presenter ? "Exit presenter" : "Presenter"}</button>
-          {!presenter && <label className="inline">Theme
-            <select value={theme} onChange={(e) => setThemePersist(e.target.value)} data-testid="theme">
-              <option value="auto">Auto</option>
-              <option value="light">Light</option>
-              <option value="dark">Dark</option>
-            </select>
-          </label>}
+          </TopMenu>
         </div>
       </header>
       <ReleaseBanner mode={mode} />

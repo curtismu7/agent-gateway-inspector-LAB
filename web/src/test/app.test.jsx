@@ -142,7 +142,7 @@ test("the theme toggle sets data-theme and every request is same-origin and cred
   const api = fakeApi();
   render(<App />);
   await screen.findByRole("option", { name: "Benign call" });
-  await userEvent.selectOptions(screen.getByTestId("theme"), "dark");
+  await userEvent.selectOptions(screen.getByTestId("theme-select"), "dark");
   expect(["dark", "light"]).toContain(document.documentElement.dataset.theme);
   await userEvent.click(screen.getByRole("button", { name: "Run" }));
   await screen.findByText(/Ran "Benign call"/);
@@ -243,11 +243,9 @@ test("the header has a Mock/Real toggle that shows the mode, and the banner says
   fakeApi();
   render(<App />);
   await screen.findByRole("option", { name: "Benign call" });
-  expect(screen.getByTestId("mode-mock")).toHaveAttribute("aria-pressed", "true");
-  expect(screen.getByTestId("mode-live")).toHaveAttribute("aria-pressed", "false");
+  expect(screen.getByTestId("mode-select")).toHaveValue("mock");
   // Rule 19: Real is disabled with the server's reason.
-  expect(screen.getByTestId("mode-live")).toBeDisabled();
-  expect(screen.getByTestId("mode-live").getAttribute("title")).toMatch(/no live gateway/);
+  expect(screen.getByTestId("mode-select").querySelector('option[value="real"]')).toBeDisabled();
   expect(screen.getByTestId("mode-badge")).toHaveTextContent("Mode: Mock");
   expect(screen.getByTestId("release-banner")).toHaveTextContent(/^Mock mode\./);
   expect(screen.getByTestId("release-banner")).toHaveAttribute("data-state", "mock");
@@ -261,14 +259,13 @@ test("Real is refused: Real is disabled so the click does nothing and the page s
   render(<App />);
   await screen.findByRole("option", { name: "Benign call" });
   const before = api.requests.length;
-  // Rule 19: Real is disabled with the reason in its tooltip; a click on a disabled button fires nothing.
-  await userEvent.click(screen.getByTestId("mode-live"));
-  expect(screen.getByTestId("mode-live")).toHaveAttribute("aria-pressed", "false");
-  expect(screen.getByTestId("mode-mock")).toHaveAttribute("aria-pressed", "true");
+  // Rule 19: Real is disabled with the reason in its tooltip; a click on a disabled option fires nothing.
+  await userEvent.click(screen.getByTestId("mode-select"));
+  expect(screen.getByTestId("mode-select")).toHaveValue("mock");
   expect(screen.getByTestId("mode-badge")).toHaveTextContent("Mode: Mock");
   expect(screen.getByTestId("release-banner")).toHaveTextContent(/^Mock mode\./);
   expect(api.requests.slice(before).filter((r) => r.method !== "GET")).toEqual([]);
-  await userEvent.click(screen.getByTestId("mode-mock"));
+  await userEvent.selectOptions(screen.getByTestId("mode-select"), "mock");
   await waitFor(() => expect(screen.queryByTestId("live-note")).toBeNull());
 });
 
@@ -276,7 +273,7 @@ test("rule 19: mock→mock posts /api/mode, gets the server's answer and the pag
   const api = fakeApi();
   render(<App />);
   await screen.findByRole("option", { name: "Benign call" });
-  await userEvent.click(screen.getByTestId("mode-mock"));
+  await userEvent.selectOptions(screen.getByTestId("mode-select"), "mock");
   await waitFor(() => expect(api.requests.some((r) => r.url === "/api/mode" && r.method === "POST")).toBe(true));
   expect(JSON.parse(api.requests.find((r) => r.url === "/api/mode").init.body)).toEqual({ source: "mock" });
   expect(screen.getByTestId("mode-badge")).toHaveTextContent("Mode: Mock");
@@ -298,13 +295,13 @@ test("presenter mode (P, Esc): the mode and the banner stay, the toggle, Reset a
   expect(document.querySelector(".app")).toHaveAttribute("data-presenter", "on");
   expect(screen.getByTestId("mode-badge")).toHaveTextContent("Mode: Mock");
   expect(screen.getByTestId("release-banner")).toBeInTheDocument();
-  expect(screen.queryByTestId("mode-live")).toBeNull();
+  expect(screen.queryByTestId("mode-select")).toBeNull();
   expect(screen.queryByRole("button", { name: "Reset" })).toBeNull();
   await userEvent.click(screen.getByRole("button", { name: "Diagram" }));
   expect(screen.getByTestId("release-banner")).toBeInTheDocument();
   await userEvent.keyboard("{Escape}");
   expect(document.querySelector(".app")).not.toHaveAttribute("data-presenter");
-  expect(screen.getByTestId("mode-live")).toBeInTheDocument();
+  expect(screen.getByTestId("mode-select")).toBeInTheDocument();
   document.getElementById("scenario-select").focus();
   await userEvent.keyboard("p");
   expect(document.querySelector(".app")).not.toHaveAttribute("data-presenter");

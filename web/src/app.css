@@ -20,7 +20,8 @@ code, .mono { font-size: 13px; overflow-wrap: anywhere; }
 .banner[data-state="warn"] { border-left-color: var(--status-warn); }
 .banner[data-state="bad"] { border-left-color: var(--danger-text); }
 .banner__mode { font-weight: 700; }
-.top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 12px 0; border-bottom: 1px solid var(--border); }
+.top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 12px 0; border-bottom: 1px solid var(--border); position: relative; }
+html { font-size: var(--fs, 16px); }
 .top__nav { display: flex; gap: 4px; flex: 1 1 200px; flex-wrap: wrap; }
 .top__tools { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .seg { display: flex; gap: 4px; align-items: center; }

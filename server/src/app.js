@@ -61,9 +61,11 @@ export function createApp({ runtime, health = createHealth(), webDist = null, en
     try { requested = modeFrom(env); } catch { /* the doctor reports it */ }
     const refusal = liveRefusal(env);
     // Rule 19: what the Mock/Real toggle needs. This lab is mock only, so Real is never available.
+    let version = null;
+    try { version = JSON.parse(fs.readFileSync(new URL('../../package.json', import.meta.url), 'utf8')).version || null; } catch { /* no version */ }
     res.json({
       mode: 'mock', source: 'mock', requested, modes: MODES, live: refusal ? { available: false, ...refusal } : { available: true },
-      realAvailable: false, realReason: LIVE_REFUSAL,
+      realAvailable: false, realReason: LIVE_REFUSAL, version,
     });
   });
 
