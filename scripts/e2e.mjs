@@ -165,7 +165,7 @@ try {
   await shot('4-audit-tamper-light');
 
   // Dark theme + diagram
-  await page.getByTestId('theme').selectOption('dark');
+  await page.getByTestId('theme-select').selectOption('dark');
   check((await page.evaluate(() => document.documentElement.dataset.theme)) === 'dark', 'theme toggles to dark');
   await shot('5-inspector-dark');
   await page.getByRole('button', { name: 'Diagram' }).click();
@@ -199,7 +199,7 @@ try {
   await shot('6-diagram-dark');
   await page.getByRole('button', { name: 'Reset diagram' }).click();
   check((await page.getByTestId('caption').innerText()).includes('Press Simulate') && (await page.locator('.fbox[data-on="true"]').count()) === 0, 'diagram Reset clears the highlight');
-  await page.getByTestId('theme').selectOption('light');
+  await page.getByTestId('theme-select').selectOption('light');
   await shot('7-diagram-light');
 
   // Reset
