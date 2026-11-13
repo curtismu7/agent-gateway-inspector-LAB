@@ -6,6 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createHealth } from './health.js';
+import { allPassed, runChecks as defaultChecks } from './doctor.js';
 import { DEFAULT_DIAGRAMS_DIR, diagramByName, loadDiagrams } from './diagramData.js';
 import { MODES, liveRefusal, modeFrom } from './config.js';
 
@@ -32,7 +33,7 @@ const methods = (allow) => (_req, res) => res.set('Allow', allow).status(405).js
 // serving; startHttpServer passes DEFAULT_WEB_DIST. A missing directory serves a JSON 404 at /.
 // env: where the default mode comes from (GATEWAY_INSPECTOR_MODE). The mode is always mock: GET /api/info says so and says why live is refused.
 // diagramsDir: the diagram-studio/1 files (server/diagrams). They are read and validated here, so a bad file stops the server from starting.
-export function createApp({ runtime, health = createHealth(), webDist = null, env = process.env, diagramsDir = DEFAULT_DIAGRAMS_DIR, allowedHosts = parseAllowedHosts(env), port = serverPort(env) } = {}) {
+export function createApp({ runtime, health = createHealth({ demoId: 'agent-gateway-inspector', demoName: 'Agent Gateway Inspector LAB', version: '0.2.0', runChecks: (a) => defaultChecks(a), allPassed, env }), webDist = null, env = process.env, diagramsDir = DEFAULT_DIAGRAMS_DIR, allowedHosts = parseAllowedHosts(env), port = serverPort(env) } = {}) {
   const diagrams = loadDiagrams(diagramsDir);
   const app = express();
   app.disable('x-powered-by');
@@ -166,7 +167,7 @@ export async function startHttpServer({ port = serverPort(), host = bindHost(), 
   assertBindAllowed(host, env);
   loadDiagrams(diagramsDir); // a bad diagram file refuses the start, before anything is opened
   const rt = runtime || await createRuntime();
-  const health = createHealth({ env });
+  const health = createHealth({ demoId: 'agent-gateway-inspector', demoName: 'Agent Gateway Inspector LAB', version: '0.2.0', runChecks: defaultChecks, allPassed, env });
   return new Promise((resolve, reject) => {
     const httpServer = createApp({ runtime: rt, health, webDist, env, diagramsDir, allowedHosts, port }).listen(port, host);
     httpServer.once('error', async (e) => { health.stop(); await rt.close(); reject(e); });
