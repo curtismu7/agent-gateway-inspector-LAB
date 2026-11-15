@@ -1,19 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createApp } from '../src/app.js';
+import { createHealth } from '../src/health.js';
 import { createRuntime } from '../src/runtime.js';
 import { fakeClock } from './fixtures.js';
-import { freeBase, request, testHealth } from './helpers.js';
+import { freeBase, request } from './helpers.js';
 
+// The app builds its own health when none is passed (its factory knows the demo identity and the doctor).
 async function boot(t, { runtime, health } = {}) {
   const base = await freeBase('api', 4);
   const clock = fakeClock();
   const rt = runtime || await createRuntime({ stubBase: base, now: clock.now, sleep: async (ms) => clock.advance(ms), upstreamTimeoutMs: 30_000 });
-  const h = health || testHealth();
   const port = base + 3;
-  const server = createApp({ runtime: rt, health: h }).listen(port, '127.0.0.1');
+  const server = createApp({ runtime: rt, ...(health ? { health } : {}) }).listen(port, '127.0.0.1');
   await new Promise((r) => server.once('listening', r));
-  t.after(async () => { h.stop(); server.closeAllConnections(); await new Promise((r) => server.close(r)); await rt.close(); });
+  t.after(async () => { server.closeAllConnections(); await new Promise((r) => server.close(r)); await rt.close(); });
   return { port, rt, clock };
 }
 const run = (port, id, body) => request(port, 'POST', `/api/scenarios/${id}/run`, body === undefined ? {} : { body });
@@ -36,7 +37,7 @@ test('GET /api/health is demo-health/1, no-store, offline', async (t) => {
 });
 
 test('health reports broken when the doctor fails, without any detail', async (t) => {
-  const health = testHealth({ runChecks: () => [{ id: 'x', level: 'fail', detail: 'secret-ish detail' }] });
+  const health = createHealth({ demoId: "agent-gateway-inspector", demoName: "Agent Gateway Inspector LAB", version: "0.2.0", runChecks: () => [{ id: "x", level: "fail", detail: "secret-ish detail" }], allPassed: (checks) => checks.every((c) => c.level !== "fail") });
   const { port } = await boot(t, { health });
   const res = await request(port, 'GET', '/api/health');
   assert.equal(res.json.state, 'broken');

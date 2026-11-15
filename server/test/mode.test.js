@@ -10,16 +10,15 @@ import { MODES, MODE_KEY, liveGuards, liveRefusal, modeFrom } from '../src/confi
 import { allPassed, runChecks } from '../src/doctor.js';
 import { createRuntime } from '../src/runtime.js';
 import { SETTINGS_KEYS, applySharedSettings, readSharedSettings, settingsPath } from '../src/settings.js';
-import { freeBase, request, testHealth } from './helpers.js';
+import { freeBase, request } from './helpers.js';
 
 async function boot(t, env) {
   const base = await freeBase('spare', 4);
   const rt = await createRuntime({ stubBase: base });
-  const health = testHealth({ env });
   const port = base + 3;
-  const server = createApp({ runtime: rt, health, env }).listen(port, '127.0.0.1');
+  const server = createApp({ runtime: rt, env }).listen(port, '127.0.0.1');
   await new Promise((r) => server.once('listening', r));
-  t.after(async () => { health.stop(); server.closeAllConnections(); await new Promise((r) => server.close(r)); await rt.close(); });
+  t.after(async () => { server.closeAllConnections(); await new Promise((r) => server.close(r)); await rt.close(); });
   return port;
 }
 const tmp = (t) => { const d = fs.mkdtempSync(path.join(os.tmpdir(), 'agi-settings-')); t.after(() => fs.rmSync(d, { recursive: true, force: true })); return d; };

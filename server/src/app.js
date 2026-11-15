@@ -33,7 +33,9 @@ const methods = (allow) => (_req, res) => res.set('Allow', allow).status(405).js
 // serving; startHttpServer passes DEFAULT_WEB_DIST. A missing directory serves a JSON 404 at /.
 // env: where the default mode comes from (GATEWAY_INSPECTOR_MODE). The mode is always mock: GET /api/info says so and says why live is refused.
 // diagramsDir: the diagram-studio/1 files (server/diagrams). They are read and validated here, so a bad file stops the server from starting.
-export function createApp({ runtime, env = process.env, health = createHealth({ demoId: 'agent-gateway-inspector', demoName: 'Agent Gateway Inspector LAB', version: '0.2.0', runChecks: (a) => defaultChecks(a), allPassed, env }), webDist = null, diagramsDir = DEFAULT_DIAGRAMS_DIR, allowedHosts = parseAllowedHosts(env), port = serverPort(env) } = {}) {
+export function createApp({ runtime, health, webDist = null, env = process.env, diagramsDir = DEFAULT_DIAGRAMS_DIR, allowedHosts = parseAllowedHosts(env), port = serverPort(env) } = {}) {
+  // The default health is built after env is bound (its doctor reads the environment); a caller-provided one wins.
+  health ||= createHealth({ demoId: 'agent-gateway-inspector', demoName: 'Agent Gateway Inspector LAB', version: '0.2.0', runChecks: (a) => defaultChecks(a), allPassed, env });
   const diagrams = loadDiagrams(diagramsDir);
   const app = express();
   app.disable('x-powered-by');
