@@ -4,15 +4,14 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { createApp, UI_CSP } from '../src/app.js';
-import { createHealth } from '../src/health.js';
 import { createRuntime } from '../src/runtime.js';
-import { freeBase, request } from './helpers.js';
+import { freeBase, request, testHealth } from './helpers.js';
 
 // Uses the 'static' slice (5861-5864): three stub upstreams plus the app.
 async function boot(t, webDist) {
   const base = await freeBase('static', 4);
   const rt = await createRuntime({ stubBase: base });
-  const health = createHealth();
+  const health = testHealth();
   const port = base + 3;
   const server = createApp({ runtime: rt, health, webDist }).listen(port, '127.0.0.1');
   await new Promise((r) => server.once('listening', r));
