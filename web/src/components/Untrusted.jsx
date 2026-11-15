@@ -35,3 +35,5 @@ export function Untrusted({ text, block = false, plain = false }) {
     </Tag>
   );
 }
+
+export const pretty = (value) => JSON.stringify(value, null, 2);
