@@ -10,8 +10,21 @@ import { allPassed, runChecks as defaultChecks } from './doctor.js';
 import { DEFAULT_DIAGRAMS_DIR, diagramByName, loadDiagrams } from './diagramData.js';
 import { MODES, liveRefusal, modeFrom } from './config.js';
 
-// The reason the Mock/Real toggle gives for Real: this lab has no live gateway to talk to.
-export const LIVE_REFUSAL = 'Real is not available in this lab: there is no live gateway to talk to (the Ping release it simulates is not on the tenant), so it stays in mock.';
+// The reason the Mock/Real toggle gives for Real when the gateway settings are absent.
+export const LIVE_REFUSAL = 'Real is not configured: set AGI_GW_URL, AGI_GW_APPS and at least one AGI_GW_KEY_<NAME> in the shared settings file (~/Development/.env, or STANDALONE_ENV). Mock keeps working.';
+// Real mode reads the one shared settings file for the gateway-hop keys this app allows (prefix AGI_).
+// The agent key is write-only: gatewayReal scrubs it from every message and error.
+import fsReal from 'node:fs';
+import { readFileSettings, doorConfig, createRealDoor } from './gatewayReal.js';
+export function realDoorFrom(env = process.env) {
+  const p = env.STANDALONE_ENV || `${env.HOME || ''}/Development/.env`;
+  let text = '';
+  try { text = fsReal.readFileSync(p, 'utf8'); } catch { /* no file: the environment may still carry the keys */ }
+  // The environment wins over the file (the family rule), so overlay the AGI_* variables on the parsed text.
+  for (const [k, v] of Object.entries(env)) if (k.startsWith('AGI_GW_') && v) text += `\n${k}=${v}`;
+  const cfg = doorConfig(text, 'AGI');
+  return cfg.ok ? createRealDoor({ config: cfg, clientInfo: { name: 'agent-gateway-inspector', version: '0.2.0' } }) : null;
+}
 import { createRuntime } from './runtime.js';
 import { assertBindAllowed, bindHost, credentialGuard, makeHostGuard, makeOriginGuard, parseAllowedHosts, serverPort } from './safety.js';
 import { SCENARIOS, describeScenario, getScenario } from './scenarios.js';
@@ -63,22 +76,47 @@ export function createApp({ runtime, health, webDist = null, env = process.env, 
     let requested = 'mock';
     try { requested = modeFrom(env); } catch { /* the doctor reports it */ }
     const refusal = liveRefusal(env);
-    // Rule 19: what the Mock/Real toggle needs. This lab is mock only, so Real is never available.
+    // Rule 19: what the Mock/Real toggle needs. Real is the shared gateway hop: an agent key from the
+    // shared settings file calling a live Privilege MCP door. Available only when the settings are usable.
+    const door = realDoorFrom(env);
     let version = null;
     try { version = JSON.parse(fs.readFileSync(new URL('../../package.json', import.meta.url), 'utf8')).version || null; } catch { /* no version */ }
     res.json({
       mode: 'mock', source: 'mock', requested, modes: MODES, live: refusal ? { available: false, ...refusal } : { available: true },
-      realAvailable: false, realReason: LIVE_REFUSAL, version,
+      realAvailable: Boolean(door), realReason: door ? null : LIVE_REFUSAL, version,
     });
   });
 
-  // Rule 19: the runtime mode is server-side. This lab is mock only, so mock→real is refused 409 and real→mock stays mock.
+  // Rule 19: the runtime mode is server-side. Switching to Real stores the door; the gateway checks run against it.
+  let realDoor = null;
   api.post('/mode', (req, res) => {
     const next = req.body?.source;
     if (next !== 'mock' && next !== 'real') return bad(res, 'source must be exactly "mock" or "real"');
-    if (next === 'real') return res.status(409).json({ error: 'real_not_available', source: 'mock', realAvailable: false, realReason: LIVE_REFUSAL, message: LIVE_REFUSAL });
-    return res.json({ source: 'mock', realAvailable: false, realReason: LIVE_REFUSAL, message: 'This lab is mock only; the page stays in mock mode.' });
+    if (next === 'real') {
+      realDoor = realDoorFrom(env);
+      if (!realDoor) return res.status(409).json({ error: 'real_not_available', source: 'mock', realAvailable: false, realReason: LIVE_REFUSAL, message: LIVE_REFUSAL });
+      return res.json({ source: 'real', realAvailable: true, realReason: null, doors: realDoor.apps, gateway: realDoor.origin });
+    }
+    realDoor = null;
+    return res.json({ source: 'mock', realAvailable: Boolean(realDoorFrom(env)), realReason: null, message: 'Back in mock: every call runs through the in-process stub gateway again.' });
   });
+
+  // One real gateway check: tools/list through the door with the agent key, then the refusal shape for a
+  // tool the key's policy does not grant. The gateway's own words come back unaltered (keys scrubbed).
+  api.post('/gateway-check', wrap(async (req, res) => {
+    if (!realDoor) return res.status(409).json({ error: 'real_not_available', realReason: LIVE_REFUSAL });
+    if (!onlyKeys(req.body, ['app', 'caller'])) return bad(res, 'the only accepted body fields are { "app", "caller" }');
+    const app = String(req.body?.app || realDoor.apps[0]);
+    if (!realDoor.apps.includes(app)) return bad(res, `app must be one of ${realDoor.apps.join(', ')}`);
+    const caller = req.body?.caller && realDoor.callers.some((c) => c.id === req.body.caller) ? req.body.caller : realDoor.callers[0].id;
+    const listing = await realDoor.list(app, caller);
+    const out = { app, caller, gateway: realDoor.origin, ...(realDoor.version ? { version: realDoor.version } : {}), listing };
+    if (listing.ok) {
+      // The refusal probe: a tool name nothing grants. The gateway's refusal layer is the evidence.
+      out.refusal = await realDoor.call(app, caller, 'gateway_inspector_refusal_probe_tool', {});
+    }
+    res.json(out);
+  }));
 
   // The flow diagram, as diagram-studio/1 data, by name. Only the names in the allow-list answer; anything else is a plain 404
   // that does not repeat what was asked for.

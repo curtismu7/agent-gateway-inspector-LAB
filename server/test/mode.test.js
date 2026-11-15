@@ -44,17 +44,18 @@ test('a settings request for live is reported but not obeyed: the effective mode
   assert.deepEqual(res.json.live.failed, ['live-gateway']);
 });
 
-test('every API answer that names a mode says mock, and the only mode-switch route refuses live with 409 (rule 19)', async (t) => {
+test('every API answer that names a mode says mock, and the mode switch refuses Real with 409 when the gateway settings are absent (rule 19)', async (t) => {
   const port = await boot(t, { [MODE_KEY]: 'live' });
   assert.equal((await request(port, 'POST', '/api/scenarios/benign/run')).json.mode, 'mock');
   assert.equal((await request(port, 'GET', '/api/calls')).json.mode, 'mock');
   assert.equal((await request(port, 'GET', '/api/audit/verify')).json.mode, 'mock');
-  // Rule 19: the toggle route exists, takes exactly {source}, and refuses mock→real with 409 and a clear reason.
+  // Rule 19: the toggle route exists, takes exactly {source}, and refuses mock→real with 409 when the
+  // shared settings file carries no AGI_* gateway hop (this test's environment never has one).
   const refused = await request(port, 'POST', '/api/mode', { body: { source: 'real' } });
   assert.equal(refused.status, 409);
   assert.equal(refused.json.error, 'real_not_available');
   assert.equal(refused.json.realAvailable, false);
-  assert.match(refused.json.realReason, /not available/i);
+  assert.match(refused.json.realReason, /not configured/i);
   const stay = await request(port, 'POST', '/api/mode', { body: { source: 'mock' } });
   assert.equal(stay.status, 200);
   assert.equal(stay.json.source, 'mock');
@@ -69,7 +70,7 @@ test('every API answer that names a mode says mock, and the only mode-switch rou
   const info = (await request(port, 'GET', '/api/info')).json;
   assert.equal(info.source, 'mock');
   assert.equal(info.realAvailable, false);
-  assert.match(info.realReason, /not available/i);
+  assert.match(info.realReason, /not configured/i);
 });
 
 test('the live guards: owner opt-in, loopback bind and a live gateway; the last one never passes, so live is refused whatever is set', () => {
