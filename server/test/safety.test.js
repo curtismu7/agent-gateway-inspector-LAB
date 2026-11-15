@@ -5,14 +5,13 @@ import net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createApp, startHttpServer } from '../src/app.js';
-import { createHealth } from '../src/health.js';
 import { createRuntime } from '../src/runtime.js';
 import { runChecks } from '../src/doctor.js';
 import { assertBindAllowed, assertUpstreamTarget, isLoopbackHost, portInRange, parseHost, SERVER_PORT, STUB_BASE_PORT, STUB_LAST_PORT } from '../src/safety.js';
 import { SCENARIOS } from '../src/scenarios.js';
 import { forwardTo } from '../src/upstreams.js';
 import { fakeClock } from './fixtures.js';
-import { freeBase, request } from './helpers.js';
+import { freeBase, request, testHealth } from './helpers.js';
 import { guardNetwork } from './netguard.js';
 
 const srcDir = path.join(path.dirname(fileURLToPath(import.meta.url)), '../src');
@@ -93,7 +92,7 @@ test('default mode: every scenario, a human approval, an audit verify and a rese
   let rt; let server; let health;
   try {
     rt = await createRuntime({ stubBase: base, now: clock.now, sleep: async (ms) => clock.advance(ms) });
-    health = createHealth();
+    health = testHealth();
     server = createApp({ runtime: rt, health }).listen(base + 3, '127.0.0.1');
     await new Promise((r) => server.once('listening', r));
     for (const sc of SCENARIOS) assert.equal((await request(base + 3, 'POST', `/api/scenarios/${sc.id}/run`)).json.matched, true, sc.id);

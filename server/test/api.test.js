@@ -1,16 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createApp } from '../src/app.js';
-import { createHealth } from '../src/health.js';
 import { createRuntime } from '../src/runtime.js';
 import { fakeClock } from './fixtures.js';
-import { freeBase, request } from './helpers.js';
+import { freeBase, request, testHealth } from './helpers.js';
 
 async function boot(t, { runtime, health } = {}) {
   const base = await freeBase('api', 4);
   const clock = fakeClock();
   const rt = runtime || await createRuntime({ stubBase: base, now: clock.now, sleep: async (ms) => clock.advance(ms), upstreamTimeoutMs: 30_000 });
-  const h = health || createHealth();
+  const h = health || testHealth();
   const port = base + 3;
   const server = createApp({ runtime: rt, health: h }).listen(port, '127.0.0.1');
   await new Promise((r) => server.once('listening', r));
@@ -37,7 +36,7 @@ test('GET /api/health is demo-health/1, no-store, offline', async (t) => {
 });
 
 test('health reports broken when the doctor fails, without any detail', async (t) => {
-  const health = createHealth({ runChecks: () => [{ id: 'x', level: 'fail', detail: 'secret-ish detail' }] });
+  const health = testHealth({ runChecks: () => [{ id: 'x', level: 'fail', detail: 'secret-ish detail' }] });
   const { port } = await boot(t, { health });
   const res = await request(port, 'GET', '/api/health');
   assert.equal(res.json.state, 'broken');
