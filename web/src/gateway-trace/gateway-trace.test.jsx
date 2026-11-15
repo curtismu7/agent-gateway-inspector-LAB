@@ -37,6 +37,19 @@ describe("GatewayTrace", () => {
     expect(screen.getByTestId("trace-1")).toHaveTextContent("all 2 decisions passed");
   });
 
+  test("a held call is not summarised as everything passed: an info decision is counted apart", () => {
+    const t = trace({
+      response: { status: 403, headers: {}, body: { error: "held for approval" } },
+      decisions: [
+        { id: "scope", label: "Scope", outcome: "pass", basis: "checked", evidence: "in scope" },
+        { id: "rule", label: "Approval rule", outcome: "info", basis: "checked", evidence: "held for a human" },
+      ],
+    });
+    render(<GatewayTrace exchanges={[ex(t)]} source="mock" />);
+    expect(screen.getByTestId("trace-1")).toHaveTextContent("1 passed, 1 for information");
+    expect(screen.getByTestId("trace-1")).not.toHaveTextContent(/all \d+ decisions passed/);
+  });
+
   test("a refusal names where it was refused, and the later decision shows NOT REACHED", () => {
     const t = trace({
       response: { status: 401, headers: {}, body: "invalid virtual key" },

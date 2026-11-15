@@ -43,9 +43,11 @@ const HOT = ["error", "isError", "tools", "result"];
 
 function Exchange({ ex }) {
   const t = ex.trace;
-  const counted = t.decisions.filter((d) => d.outcome !== "info");
+  const passed = t.decisions.filter((d) => d.outcome === "pass").length;
+  const notes = t.decisions.filter((d) => d.outcome === "info").length;
   const failed = t.decisions.find((d) => d.outcome === "fail");
-  const summary = failed ? `refused at: ${failed.label}` : `all ${counted.length} decisions passed`;
+  // An "info" decision (a hold, a pause, an answer the panel does not interpret) is never counted as passed.
+  const summary = failed ? `refused at: ${failed.label}` : notes ? `${passed} passed, ${notes} for information` : `all ${passed} decisions passed`;
   const id = `trace-${ex.step}`;
   return (
     <details className="gw-ex" open data-testid={id}>
