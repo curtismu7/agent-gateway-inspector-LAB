@@ -8,15 +8,14 @@ import path from 'node:path';
 import { createApp, startHttpServer } from '../src/app.js';
 import { MODES, MODE_KEY, liveGuards, liveRefusal, modeFrom } from '../src/config.js';
 import { allPassed, runChecks } from '../src/doctor.js';
-import { createHealth } from '../src/health.js';
 import { createRuntime } from '../src/runtime.js';
 import { SETTINGS_KEYS, applySharedSettings, readSharedSettings, settingsPath } from '../src/settings.js';
-import { freeBase, request } from './helpers.js';
+import { freeBase, request, testHealth } from './helpers.js';
 
 async function boot(t, env) {
   const base = await freeBase('spare', 4);
   const rt = await createRuntime({ stubBase: base });
-  const health = createHealth({ env });
+  const health = testHealth({ env });
   const port = base + 3;
   const server = createApp({ runtime: rt, health, env }).listen(port, '127.0.0.1');
   await new Promise((r) => server.once('listening', r));
