@@ -15,6 +15,7 @@ import { AGENTS, GRANT_TTL_MS, LAYERS, evaluate, PAUSE_TTL_MS, RATE_LIMIT, TOOLS
 import { HOLD_REF_RE, callHash, newHoldRef } from './approval.js';
 import { inertValue, revealText } from './sanitize.js';
 import { redactRecord } from './redaction.js';
+import { traceForCall } from './callTrace.js';
 
 export const RING_CAP = 200;
 export const PENDING_CAP = 20;
@@ -39,6 +40,7 @@ export function createGateway({ forward, now = () => Date.now(), audit = createA
   const secrets = new Map(); // call id -> { code, failures, args }
   const holdRefs = new Map(); // hold reference -> call id
   const retryInputs = new Map(); // call id -> what the simulated agent sends again to retry a held call
+  const presented = new WeakMap(); // call record -> the token id and surface the simulated agent presented (shown in the trace, never in the API view)
 
   const touch = (c) => { c.rev = ++rev; };
   // Waiting for a human: an attended call pending, or an unattended hold that is not yet decided or not yet used.
@@ -84,7 +86,8 @@ export function createGateway({ forward, now = () => Date.now(), audit = createA
     return exceeded;
   }
 
-  const view = (c, detail = false) => {
+  // withTrace: add `trace` (the "What Privilege did" record, or null while the call has no answer yet). Built from the stored record, so it follows its state.
+  const view = (c, detail = false, withTrace = false) => {
     const { pause, hold, upstream, ...rest } = c;
     const out = { ...rest };
     if (hold) {
@@ -97,6 +100,7 @@ export function createGateway({ forward, now = () => Date.now(), audit = createA
       if (detail && c.outcome === 'pending') out.pause.approvalCode = secrets.get(c.id)?.code ?? null;
     }
     if (upstream) out.upstream = detail ? upstream : { ok: upstream.ok, error: upstream.error ?? null };
+    if (withTrace) out.trace = traceForCall(c, presented.get(c) ?? {});
     return structuredClone(out);
   };
 
@@ -179,6 +183,7 @@ export function createGateway({ forward, now = () => Date.now(), audit = createA
     } else if (approvalRef !== undefined && verdict.reason.startsWith('approval_')) c.approvalRef = typeof approvalRef === 'string' && HOLD_REF_RE.test(approvalRef) ? approvalRef : null;
     let pauseWanted = verdict.decision === 'pause';
     if (pauseWanted && pendingCount() >= pendingCap) { c.decision = 'deny'; c.reason = 'pause_queue_full'; c.ruleId = null; pauseWanted = false; }
+    presented.set(c, { tokenId: typeof tokenId === 'string' ? safeText(tokenId) : undefined, surface: typeof surface === 'string' ? safeText(surface, 16) : surface === undefined ? undefined : '?' });
     calls.set(id, c);
     touch(c);
     audit.append('decision', id, { agentId: c.agentId, tool: c.tool, args: c.args, decision: c.decision, reason: c.reason, ruleId: c.ruleId, requiredScope: c.requiredScope, layers: c.layers, subject: c.claims?.subject ?? null });
@@ -240,7 +245,7 @@ export function createGateway({ forward, now = () => Date.now(), audit = createA
       if (c.hold) { c.hold.deniedBy = 'human'; c.hold.decidedAt = new Date(now()).toISOString(); }
       touch(c);
       audit.append(`${kind}_denied`, id, { agentId: c.agentId, tool: c.tool });
-      return { status: 200, call: view(c) };
+      return { status: 200, call: view(c, false, true) };
     }
     if (c.hold) {
       // Approving a hold forwards nothing. It opens a grant bound to this call's hash that the agent's exact retry can use once.
@@ -248,12 +253,12 @@ export function createGateway({ forward, now = () => Date.now(), audit = createA
       c.hold.expiresAtMs = now() + grantTtlMs; c.hold.grantTtlSec = grantTtlMs / 1000;
       touch(c);
       audit.append('hold_approved', id, { agentId: c.agentId, tool: c.tool, ref: c.hold.ref, expiresAt: new Date(c.hold.expiresAtMs).toISOString() });
-      return { status: 200, call: view(c) };
+      return { status: 200, call: view(c, false, true) };
     }
     c.outcome = 'forwarding'; c.pause.state = 'approved';
     audit.append('pause_approved', id, { agentId: c.agentId, tool: c.tool });
     await forwardCall(c, rawArgs);
-    return { status: 200, call: view(c) };
+    return { status: 200, call: view(c, false, true) };
   }
 
   // The simulated agent retries a held call exactly as it first sent it, presenting the hold's reference. The retry is a
@@ -264,12 +269,14 @@ export function createGateway({ forward, now = () => Date.now(), audit = createA
     if (!c) return { status: 404, error: 'not_found' };
     const input = retryInputs.get(id);
     if (!c.hold || !input) return { status: 409, error: 'not_held' };
-    return { status: 200, call: await handle({ ...input, approvalRef: c.hold.ref, scenarioId: c.scenarioId }) };
+    const again = await handle({ ...input, approvalRef: c.hold.ref, scenarioId: c.scenarioId });
+    const rec = calls.get(again.id);
+    return { status: 200, call: rec ? view(rec, false, true) : again };
   }
 
   return {
     audit, handle, decide, retry,
-    get(id, { detail = true } = {}) { sweep(); const c = calls.get(id); return c ? view(c, detail) : null; },
+    get(id, { detail = true, trace = detail } = {}) { sweep(); const c = calls.get(id); return c ? view(c, detail, trace) : null; },
     list({ since = 0, limit = 200 } = {}) {
       sweep();
       const items = [...calls.values()].filter((c) => c.rev > since).sort((a, b) => a.seq - b.seq).slice(0, limit).map((c) => view(c));
