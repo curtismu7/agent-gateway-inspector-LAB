@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import ShelfLink from "./components/ShelfLink.jsx";
-import VerifyMark from "./components/VerifyMark.jsx";
 import TopMenu, { applyFontSize } from "./top-menu/TopMenu.jsx";
 import { decide, getAudit, getCall, getCalls, getHealth, getInfo, getScenarios, postMode, postReset, retryCall, runScenario, verifyAudit } from "./lib/api.js";
 import { DECISION, ERROR_TEXT, REASON } from "./lib/status.js";
@@ -9,7 +8,7 @@ import CallDetail from "./components/CallDetail.jsx";
 import AuditPanel from "./components/AuditPanel.jsx";
 import Flow from "./components/Flow.jsx";
 import Story from "./components/Story.jsx";
-import GatewayTrace from "./gateway-trace/GatewayTrace.jsx";
+import PrivilegeCheck from "./privilege-check/PrivilegeCheck.jsx";
 
 const safe = (fn, fallback) => { try { return fn(); } catch { return fallback; } };
 const initialTheme = () => {
@@ -19,13 +18,6 @@ const initialTheme = () => {
 const initialFont = () => { const f = safe(() => localStorage.getItem("agi.font"), null); return ["S", "M", "L"].includes(f) ? f : "M"; };
 const POLL_MS = 2000;
 const count = (calls, d) => calls.filter((c) => c.decision === d).length;
-// The "What Privilege did" panel shows the calls of the current Run (and the retries made from them). A call that has no answer yet
-// (waiting for a human) has trace null; it appears here as soon as a later reply carries its trace.
-const noteTraces = (prev, calls) => {
-  const next = new Map(prev);
-  for (const c of calls) if (c && c.id && c.trace !== undefined) next.set(c.id, { tool: c.tool, trace: c.trace });
-  return next;
-};
 
 const LIVE_REFUSED = "Live is refused: this app has no live gateway to talk to, because the Ping release it simulates is not on our tenant. It stays in mock.";
 
@@ -38,19 +30,6 @@ function ReleaseBanner({ mode }) {
       <strong>Ping release claim (2026-11-02), UNVERIFIED on our tenant.</strong>{" "}
       Four layered scope checks, a third outcome that holds for a human, and approvals that work once and are bound to the exact call are what the release is claimed to do. This app simulates them with a stub gateway and stub tool servers on loopback; nothing real is called. Live is refused: there is no live gateway, so there is no live path until the release is on our tenant.
     </section>
-  );
-}
-
-// "What Privilege did" under the Run result: one exchange per call of the run that has an answer. Calls still waiting for a human are named, not drawn.
-function TracePanel({ traces, source }) {
-  const entries = [...traces.entries()];
-  const exchanges = entries.filter(([, v]) => v.trace).map(([id, v], i) => ({ step: i + 1, title: `${id}: tools/call ${v.tool}`, status: v.trace.response?.status ?? null, trace: v.trace }));
-  const waiting = entries.filter(([, v]) => !v.trace).map(([id]) => id);
-  return (
-    <div className="trace-panel card" data-testid="trace-panel">
-      <GatewayTrace exchanges={exchanges} source={source === "real" ? "real" : "mock"} />
-      {waiting.length > 0 && <p className="muted small" data-testid="trace-waiting">{waiting.join(", ")} {waiting.length === 1 ? "is" : "are"} waiting for you or still being forwarded: the exchange appears here once there is an answer.</p>}
-    </div>
   );
 }
 
@@ -74,7 +53,6 @@ export default function App() {
   const [detail, setDetail] = useState(null);
   const [detailError, setDetailError] = useState("");
   const [lastRun, setLastRun] = useState(null);
-  const [traces, setTraces] = useState(() => new Map());
   const [storyNow, setStoryNow] = useState(-1);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -107,7 +85,7 @@ export default function App() {
       if (sel.current) {
         const found = c.calls.find((x) => x.id === sel.current);
         if (!found) { setSelectedId(null); setDetail(null); } else {
-          try { const d = (await getCall(sel.current)).call; setDetail(d); if (d) setTraces((t) => (t.has(d.id) ? noteTraces(t, [d]) : t)); } catch { /* keep the old detail */ }
+          try { setDetail((await getCall(sel.current)).call); } catch { /* keep the old detail */ }
         }
       }
       return { calls: c.calls, auditSize: a.size };
@@ -126,7 +104,7 @@ export default function App() {
   const select = (id, el) => {
     setSelectedId(id); setDetailError(""); setDetail(null);
     sel.current = id;
-    getCall(id).then((d) => { if (sel.current === id) setDetail(d.call); setTraces((t) => (t.has(id) ? noteTraces(t, [d.call]) : t)); }, () => setDetailError("Could not load that call."));
+    getCall(id).then((d) => { if (sel.current === id) setDetail(d.call); }, () => setDetailError("Could not load that call."));
     if (el) setTimeout(() => detailHeading.current?.focus(), 0);
   };
 
@@ -142,7 +120,7 @@ export default function App() {
     setBusy(true); setError(""); setMessage("Running");
     try {
       const r = await runScenario(scenarioId, holdIt);
-      setLastRun(r); setVerify(null); setTraces(noteTraces(new Map(), r.calls));
+      setLastRun(r); setVerify(null);
       setMessage(summarize(r));
       const snap = await refresh();
       const first = r.calls.find((c) => c.outcome === "pending" || c.outcome === "held") || r.calls[0];
@@ -156,8 +134,7 @@ export default function App() {
     if (!code) { setDetailError("No approval code is available for this call."); return; }
     setBusy(true); setDetailError("");
     try {
-      const answered = await decide(detail.id, decision, code);
-      if (answered?.call) setTraces((t) => (t.has(answered.call.id) ? noteTraces(t, [answered.call]) : t));
+      await decide(detail.id, decision, code);
       if (detail.hold) setMessage(decision === "approve" ? `Approved ${detail.id}: nothing was forwarded. The agent can now retry the exact call once.` : `Denied ${detail.id}: it was never forwarded.`);
       else setMessage(decision === "approve" ? `Approved ${detail.id}: the gateway forwarded it to the upstream.` : `Denied ${detail.id}: it was never forwarded.`);
     } catch (e) { setDetailError(ERROR_TEXT[e.code] || `Could not answer: ${e.message}`); } finally {
@@ -172,7 +149,6 @@ export default function App() {
     setBusy(true); setDetailError("");
     try {
       const { call: again } = await retryCall(detail.id);
-      setTraces((t) => noteTraces(t, [again]));
       const word = DECISION[again.decision]?.word || again.decision;
       setMessage(`The agent retried ${detail.id} as ${again.id}: ${word}, ${again.reason}. ${REASON[again.reason] || ""}`);
     } catch (e) { setDetailError(ERROR_TEXT[e.code] || `Could not retry: ${e.message}`); } finally {
@@ -195,7 +171,7 @@ export default function App() {
     try {
       await postReset();
       setResetSignal((n) => n + 1); // the diagram boxes go back to where they started
-      setLastRun(null); setTraces(new Map()); setVerify(null); setSelectedId(null); setDetail(null); setCalls([]);
+      setLastRun(null); setVerify(null); setSelectedId(null); setDetail(null); setCalls([]);
       await refresh();
       setMessage("Reset: calls cleared and a new audit epoch started. The old trail is discarded and the new one records that.");
     } catch (e) { setError(`Reset failed: ${e.message}`); } finally { setBusy(false); }
@@ -251,7 +227,6 @@ export default function App() {
             onReset={presenter ? undefined : reset}
           >
             <ShelfLink />
-            <VerifyMark id="agent-gateway-inspector" />
           </TopMenu>
         </div>
       </header>
@@ -260,6 +235,8 @@ export default function App() {
       {health?.unreachable && <div className="banner" data-state="bad" role="alert">Cannot reach the gateway API. Is the server running?</div>}
       {health && !health.unreachable && health.state !== "ready" && <div className="banner" data-state="warn" role="alert">Server health is {health.state}. Run <code>npm run doctor</code>.</div>}
       <main id="main" tabIndex={-1} className="page">
+
+        <PrivilegeCheck />
         <section className="card picker" aria-label="Run a scenario">
           <label htmlFor="scenario-select">Scenario</label>
           <div className="picker__field">
@@ -277,7 +254,6 @@ export default function App() {
         <div role="status" aria-live="polite" className="scan-status" data-testid="run-status">{message}</div>
         {error && <p className="alert" role="alert">{error}</p>}
         {pollError && <p className="alert" role="alert">{pollError}</p>}
-        <TracePanel traces={traces} source={source} />
 
         {view === "inspector" ? (
           <>

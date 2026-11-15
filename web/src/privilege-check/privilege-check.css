@@ -1,0 +1,33 @@
+/* privilege-check.css — the family's one "through the Privilege gateway" card.
+   Uses only the shared standalone-ui.css tokens; falls back to sensible values when absent. */
+.pcard {
+  border: 1px solid var(--border, #d9d9de);
+  border-radius: 10px;
+  padding: 0.75rem 1rem;
+  margin: 0.75rem 0;
+  background: var(--box, #fff);
+  color: var(--text, #16181f);
+  font-size: 0.9rem;
+  max-width: 46rem;
+}
+.pcard__head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.5rem; }
+.pcard__title { margin: 0; font-size: 1rem; }
+.pcard__retry {
+  border: 1px solid var(--border, #d9d9de); border-radius: 7px; background: var(--ping-red, #d20e0f);
+  color: #fff; padding: 0.25rem 0.6rem; font-size: 0.8rem; cursor: pointer;
+}
+.pcard__retry:disabled { opacity: 0.6; cursor: default; }
+.pcard__note { margin: 0.35rem 0; color: var(--muted, #555); }
+.pcard__note--honest { color: var(--muted, #555); font-style: italic; }
+.pcard__note--error { color: var(--ping-red, #d20e0f); }
+.pcard__facts { display: flex; flex-wrap: wrap; gap: 0.4rem 1.2rem; margin: 0.35rem 0; padding: 0; }
+.pcard__fact dt { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted, #555); }
+.pcard__fact dd { margin: 0; font-size: 0.85rem; }
+.pcard__mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.82rem; word-break: break-all; }
+.pcard__line { margin: 0.45rem 0 0.2rem; }
+.pcard__tools { margin: 0.2rem 0 0.2rem 1rem; padding: 0; }
+.pcard__raw {
+  margin: 0.2rem 0; padding: 0.45rem 0.6rem; background: var(--box-dark, #16181f); color: var(--on-box, #fcfcfc);
+  border-radius: 7px; font-size: 0.76rem; overflow-x: auto; white-space: pre-wrap; word-break: break-word;
+}
+.pcard__how { margin: 0.5rem 0 0; font-size: 0.78rem; color: var(--muted, #555); }
