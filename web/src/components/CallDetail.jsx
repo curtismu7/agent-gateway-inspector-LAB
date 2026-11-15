@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { DecisionBadge, OutcomeBadge } from "./Badges.jsx";
-import { Untrusted } from "./Untrusted.jsx";
+import { Untrusted, pretty } from "./Untrusted.jsx";
 import Json from "./JsonPane.jsx";
 import { HOLD_STATE, LAYERS, LAYER_RESULT, REASON, RULE } from "../lib/status.js";
 
@@ -70,7 +70,8 @@ export default function CallDetail({ call, headingRef, busy, onDecide, onRetry, 
       </dl>
       {call.layers && <ScopeStrip layers={call.layers} claims={call.claims} />}
       <h3>Arguments <span className="muted small">(shown as text; hidden characters are made visible)</span></h3>
-      {call.args === null ? <p className="muted">(not an object the gateway accepts)</p> : <Json value={call.args} label="Arguments" hot={HOT} />}
+      <Untrusted text={call.args === null ? "(not an object the gateway accepts)" : pretty(call.args)} block />
+      {call.args !== null && <Json value={call.args} label="Arguments" hot={HOT} />}
 
       {call.pause && (
         <div className="pause" data-testid="pause">
@@ -127,7 +128,7 @@ export default function CallDetail({ call, headingRef, busy, onDecide, onRetry, 
           <h3>Upstream answer</h3>
           {call.upstream.ok === false
             ? <p>The upstream did not answer: <Untrusted text={call.upstream.error || "error"} plain /></p>
-            : call.upstream.result !== undefined ? <Json value={call.upstream.result} label="Upstream answer" hot={HOT} /> : <p className="muted">Forwarded; the answer is shown in the detail view only.</p>}
+            : call.upstream.result !== undefined ? <><Untrusted text={pretty(call.upstream.result)} block /><Json value={call.upstream.result} label="Upstream answer" hot={HOT} /></> : <p className="muted">Forwarded; the answer is shown in the detail view only.</p>}
         </>
       )}
     </section>
