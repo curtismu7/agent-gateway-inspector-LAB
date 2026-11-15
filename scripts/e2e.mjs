@@ -78,14 +78,15 @@ try {
   check(/support-bot/.test(detailText) && /tickets\.read/.test(detailText) && /allow-ticket-read/.test(detailText) && /Why/.test(detailText), 'detail shows agent, tool, matched rule and why');
   await shot('1-allow-light');
 
-  // Deny, with a hidden-character-free injection shown as text and marked.
+  // Deny, with a hidden-character-free injection shown as text; the argument that carries it stands out (a hot key in the JsonPane).
   await page.locator('#scenario-select').selectOption('prompt-injection');
   await page.getByRole('button', { name: 'Run', exact: true }).click();
   await runDone(/^Ran "Prompt-injected tool argument"/);
   check(/1 deny/.test(await status()), `injection run announced: "${await status()}"`);
   const det2 = page.getByTestId('detail');
-  await det2.locator('mark').first().waitFor();
-  check((await det2.locator('mark').count()) > 0, 'instruction-like text in the arguments is marked');
+  const hotArg = det2.locator('[aria-label="Arguments"]').locator('.jform__row[data-hot="true"], .jtok--hot').filter({ hasText: 'Ignore previous instructions' });
+  await hotArg.first().waitFor();
+  check((await hotArg.count()) > 0, 'the argument holding the instruction-like text stands out');
   check((await det2.innerText()).includes('Ignore previous instructions'), 'the injected text is shown as text');
   check((await det2.locator('[data-decision="deny"]').count()) === 1 && /prompt_injection/.test(await det2.innerText()), 'detail shows Deny and the reason');
   await shot('2-deny-light');

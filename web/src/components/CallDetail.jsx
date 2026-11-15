@@ -1,7 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { DecisionBadge, OutcomeBadge } from "./Badges.jsx";
-import { Untrusted, pretty } from "./Untrusted.jsx";
+import { Untrusted } from "./Untrusted.jsx";
+import Json from "./JsonPane.jsx";
 import { HOLD_STATE, LAYERS, LAYER_RESULT, REASON, RULE } from "../lib/status.js";
+
+// The keys that matter in this lab's tool arguments and stub answers (the JsonPane defaults stay hot too).
+const HOT = ["ticketId", "amount", "to", "path", "transferId", "status", "deleted"];
 
 function Countdown({ iso }) {
   const [now, setNow] = useState(() => Date.now());
@@ -66,7 +70,7 @@ export default function CallDetail({ call, headingRef, busy, onDecide, onRetry, 
       </dl>
       {call.layers && <ScopeStrip layers={call.layers} claims={call.claims} />}
       <h3>Arguments <span className="muted small">(shown as text; hidden characters are made visible)</span></h3>
-      <Untrusted text={call.args === null ? "(not an object the gateway accepts)" : pretty(call.args)} block />
+      {call.args === null ? <p className="muted">(not an object the gateway accepts)</p> : <Json value={call.args} label="Arguments" hot={HOT} />}
 
       {call.pause && (
         <div className="pause" data-testid="pause">
@@ -123,7 +127,7 @@ export default function CallDetail({ call, headingRef, busy, onDecide, onRetry, 
           <h3>Upstream answer</h3>
           {call.upstream.ok === false
             ? <p>The upstream did not answer: <Untrusted text={call.upstream.error || "error"} plain /></p>
-            : call.upstream.result !== undefined ? <Untrusted text={pretty(call.upstream.result)} block /> : <p className="muted">Forwarded; the answer is shown in the detail view only.</p>}
+            : call.upstream.result !== undefined ? <Json value={call.upstream.result} label="Upstream answer" hot={HOT} /> : <p className="muted">Forwarded; the answer is shown in the detail view only.</p>}
         </>
       )}
     </section>
