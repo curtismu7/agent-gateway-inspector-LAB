@@ -87,6 +87,7 @@ Other ports this app uses, all inside 5850-5899: the stub tool servers on 5851-5
 - The header has a **Mock / Live** toggle on every page (the Inspector and the Diagram tab). It shows the mode as `Mode: Mock`, and the banner under it says the same ("Mock mode.").
 - **Mock** is the in-process stub gateway and the three stub tool servers. Everything in this README runs in Mock.
 - **Live** is refused. `GET /api/info` answers `{"mode":"mock","live":{"available":false,"failed":[...]}}`. Live passes only when every guard passes: the owner opted in with `GATEWAY_INSPECTOR_MODE=live`, the server is bound to loopback or `GATEWAY_INSPECTOR_BIND` is set (any value of it passes this guard, so it is a weak check and says nothing about the address), and there is a live gateway to talk to. The last guard cannot pass because there is none. Pressing Live changes nothing and sends no request; it shows the reason and leaves Mock selected. Pressing Mock clears the message.
+- **What Privilege did** (under the Run result): for each call of the run, the request the simulated agent sent to the stub gateway, the answer it got and the decisions in between, in the order `policy.js` evaluates them (agent, tool, arguments, token, the four scope layers, rate limit, rules, then the approval and the tool server). It is the family's shared trace panel, vendored and pinned in `web/src/gateway-trace/`. There is no HTTP call here, so the request and answer are a lab-shaped rendering of the in-process call (host `agent-gateway.invalid`); the decisions are labelled as computed by the stub, and a call still waiting for you appears once you answer it.
 - **Presenter mode** (press `P`, or the Presenter button; `Esc` leaves). It enlarges the text and removes the toggle, Reset and theme buttons. The mode chip and the banner stay.
 - **Reset** (header button) clears the calls and starts a new audit epoch, and puts the diagram boxes back where they started.
 - Dark and light themes: the Dark/Light button sets `data-theme`; the shared stylesheet does the rest.
@@ -117,7 +118,7 @@ The container publishes on `127.0.0.1` only (a test pins it), runs as the non-ro
 npm test      # server (node:test), web (vitest) and the script tests (node --test scripts/*.test.mjs)
 ```
 
-On Node 26, with the counts from the last run in this repo: 200 server tests (node:test), 70 web tests (vitest) and 44 script tests (node:test), 314 in all, all passing.
+On Node 26, with the counts from the last run in this repo: 212 server tests (node:test), 87 web tests (vitest) and 52 script tests (node:test), 351 in all, all passing.
 
 ## Troubleshooting
 

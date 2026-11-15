@@ -138,7 +138,7 @@ export async function runScenario(gateway, id, { hold = false, sleep = (ms) => n
       late = (await gateway.decide(v.id, { decision: 'approve', approvalCode: code })).error;
     }
   }
-  const calls = ids.map((cid) => gateway.get(cid, { detail: false }));
+  const calls = ids.map((cid) => gateway.get(cid, { detail: false, trace: true }));
   return {
     scenario: describeScenario(sc), held: hold && sc.resolve ? true : false,
     calls, expected: sc.expected, lateApproval: late,
