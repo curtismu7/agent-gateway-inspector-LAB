@@ -69,7 +69,8 @@ try {
 
   // Keyboard only: Tab on to a call and open its detail with Enter.
   let onCall = false;
-  for (let i = 0; i < 6 && !onCall; i++) { await page.keyboard.press('Tab'); onCall = (await active()).includes('call-'); }
+  // The What Privilege did panel sits between Run and the list, so a few more Tab stops come first; a call is the element carrying data-call-id.
+  for (let i = 0; i < 30 && !onCall; i++) { await page.keyboard.press('Tab'); onCall = await page.evaluate(() => Boolean(document.activeElement?.closest?.('[data-call-id]'))); }
   check(onCall, 'Tab reaches a call in the list');
   await page.keyboard.press('Enter');
   await page.getByTestId('detail').waitFor();
