@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App.jsx";
 import "./styles/standalone-ui.css";
 import "./top-menu/top-menu.css";
+import "./components/JsonPane.css";
 import "./app.css";
 
 createRoot(document.getElementById("root")).render(<App />);

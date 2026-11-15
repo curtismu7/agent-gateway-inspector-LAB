@@ -4,7 +4,10 @@ import userEvent from "@testing-library/user-event";
 import CallList from "../components/CallList.jsx";
 import CallDetail from "../components/CallDetail.jsx";
 import AuditPanel from "../components/AuditPanel.jsx";
+import { setJsonView } from "../components/JsonPane.jsx";
 import { call, paused, entry } from "./fixtures.js";
+
+beforeEach(() => setJsonView("raw")); // the Form | JSON choice is shared module state; these tests read the JSON text
 
 test("the call list shows allow, deny and pause as a word plus a glyph, newest first", () => {
   const calls = [call({ id: "call-0001" }), call({ id: "call-0002", decision: "deny", outcome: "blocked", reason: "scope_exceeded", ruleId: null }), paused({ id: "call-0003" })];
