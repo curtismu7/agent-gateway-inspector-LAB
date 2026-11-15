@@ -4,18 +4,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createApp } from '../src/app.js';
-import { createHealth } from '../src/health.js';
 import { createRuntime } from '../src/runtime.js';
 import { SCENARIOS } from '../src/scenarios.js';
 import { fakeClock } from './fixtures.js';
-import { freeBase, request } from './helpers.js';
+import { freeBase, request, testHealth } from './helpers.js';
 import { guardNetwork } from './netguard.js';
 
 async function boot(t) {
   const base = await freeBase('spare', 4);
   const clock = fakeClock();
   const rt = await createRuntime({ stubBase: base, now: clock.now, sleep: async (ms) => clock.advance(ms), upstreamTimeoutMs: 30_000 });
-  const h = createHealth();
+  const h = testHealth();
   const port = base + 3;
   const server = createApp({ runtime: rt, health: h }).listen(port, '127.0.0.1');
   await new Promise((r) => server.once('listening', r));
