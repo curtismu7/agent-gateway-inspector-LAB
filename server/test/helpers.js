@@ -2,6 +2,8 @@
 // Two files on one slice race for the same ports when node --test runs them as parallel processes.
 import http from 'node:http';
 import net from 'node:net';
+import { createHealth } from '../src/health.js';
+import { allPassed, runChecks } from '../src/doctor.js';
 
 export const BASES = { scenarios: 5880, api: 5884, safety: 5888, guards: 5892, spare: 5896, static: 5861, upstreams: 5865 };
 const SLICE_END = { scenarios: 5883, api: 5887, safety: 5891, guards: 5895, spare: 5899, static: 5864, upstreams: 5867 };
@@ -45,3 +47,6 @@ export function request(port, method, path, { headers = {}, body, host } = {}) {
     req.end();
   });
 }
+
+// The vendored health service needs the lab's identity and doctor checks (the same ones app.js passes); tests override any of them.
+export const testHealth = (over = {}) => createHealth({ demoId: 'agent-gateway-inspector', demoName: 'Agent Gateway Inspector LAB', version: '0.2.0', runChecks, allPassed, ...over });
