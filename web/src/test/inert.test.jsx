@@ -121,3 +121,10 @@ test("reduced motion switches off every animation and transition (the shared sty
   // no smooth scrolling anywhere, so there is nothing the reduced-motion block would have to switch back to auto
   expect(shared + app).not.toMatch(/scroll-behavior\s*:\s*smooth/);
 });
+
+test("the marked block shows the whole payload: no height cap and no inner scroll (Rule 24 full view)", () => {
+  const app = fs.readFileSync(path.resolve(process.cwd(), "src/app.css"), "utf8");
+  const rules = [...app.matchAll(/([^{}]*\.untrusted(?:--block)?\b[^{}]*)\{([^}]*)\}/g)].map((m) => m[2]);
+  expect(rules.length).toBeGreaterThan(0);
+  for (const body of rules) expect(body).not.toMatch(/max-height|overflow\s*:\s*(auto|scroll|hidden)/);
+});
