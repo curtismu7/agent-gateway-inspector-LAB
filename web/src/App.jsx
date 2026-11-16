@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import ShelfLink from "./components/ShelfLink.jsx";
+import VerifyMark from "./components/VerifyMark.jsx";
 import TopMenu, { applyFontSize } from "./top-menu/TopMenu.jsx";
 import { decide, getAudit, getCall, getCalls, getHealth, getInfo, getScenarios, postMode, postReset, retryCall, runScenario, verifyAudit } from "./lib/api.js";
 import { DECISION, ERROR_TEXT, REASON } from "./lib/status.js";
@@ -250,6 +251,7 @@ export default function App() {
             onReset={presenter ? undefined : reset}
           >
             <ShelfLink />
+            <VerifyMark id="agent-gateway-inspector" />
           </TopMenu>
         </div>
       </header>

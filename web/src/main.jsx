@@ -4,6 +4,7 @@ import App from "./App.jsx";
 import "./styles/standalone-ui.css";
 import "./top-menu/top-menu.css";
 import "./components/JsonPane.css";
+import "./components/VerifyMark.css";
 import "./gateway-trace/gateway-trace.css";
 import "./app.css";
 
