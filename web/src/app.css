@@ -80,9 +80,9 @@ mark { background: var(--accent-soft); color: var(--text); padding: 0 2px; borde
 .audit__head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; }
 .audit__head h2 { margin: 0; }
 .verify-slot { min-height: 32px; }
-.verify { margin: 8px 0; padding: 8px 12px; border-radius: 8px; border: 2px solid currentcolor; font-weight: 700; background: var(--surface-2); }
-.verify--ok { color: var(--status-ok); }
-.verify--bad { color: var(--danger-text); }
+.audit-verify { margin: 8px 0; padding: 8px 12px; border-radius: 8px; border: 2px solid currentcolor; font-weight: 700; background: var(--surface-2); }
+.audit-verify--ok { color: var(--status-ok); }
+.audit-verify--bad { color: var(--danger-text); }
 .table-wrap { overflow: auto; max-height: 352px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
 .inv { border-collapse: collapse; width: 100%; min-width: 640px; }
 .inv th, .inv td { text-align: left; vertical-align: top; padding: 6px 12px; border-bottom: 1px solid var(--border); font-size: 14px; }

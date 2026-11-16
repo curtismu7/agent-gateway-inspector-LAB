@@ -154,7 +154,7 @@ try {
 
   // Audit trail and Verify chain
   await page.getByRole('button', { name: 'Verify chain' }).click();
-  await page.locator('.verify--ok').waitFor();
+  await page.locator('.audit-verify--ok').waitFor();
   const ok = await page.getByTestId('verify-result').innerText();
   check(/Chain verified/.test(ok), `verify chain OK: "${ok}"`);
   const rows = await page.locator('table.inv tbody tr').count();
@@ -162,7 +162,7 @@ try {
   // Tamper result: the server cannot be tampered through the API, so answer the verify call with a failure to see the UI path.
   await page.route('**/api/audit/verify', (r) => r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ mode: 'mock', ok: false, length: 12, firstBadSeq: 7, reason: 'hash_mismatch' }) }));
   await page.getByRole('button', { name: 'Verify chain' }).click();
-  await page.locator('.verify--bad').waitFor();
+  await page.locator('.audit-verify--bad').waitFor();
   const bad = await page.getByTestId('verify-result').innerText();
   check(/TAMPERED/.test(bad) && /#7/.test(bad), `tamper result is visible: "${bad}"`);
   await page.unroute('**/api/audit/verify');
@@ -212,7 +212,7 @@ try {
   await page.getByText('No calls yet').waitFor();
   check(true, 'Reset empties the call list');
   await page.getByRole('button', { name: 'Verify chain' }).click();
-  await page.locator('.verify--ok').waitFor();
+  await page.locator('.audit-verify--ok').waitFor();
   check(/Chain verified/.test(await page.getByTestId('verify-result').innerText()), 'after Reset the new audit epoch verifies');
 
   // Narrow viewport

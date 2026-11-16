@@ -19,8 +19,8 @@ export default function AuditPanel({ entries, size, verify, onVerify, busy }) {
       </div>
       <div role="status" aria-live="polite" data-testid="verify-result" className="verify-slot">
         {verify && (verify.ok
-          ? <p className="verify verify--ok"><span aria-hidden="true">{"✓"}</span> Chain verified: {verify.length} entr{verify.length === 1 ? "y" : "ies"}, head #{verify.headSeq}, {shortHash(verify.headHash)}. Every entry links to the one before it.</p>
-          : <p className="verify verify--bad" role="alert"><span aria-hidden="true">{"✕"}</span> TAMPERED: the chain fails at entry #{verify.firstBadSeq}: {REASONS[verify.reason] || verify.reason}.</p>)}
+          ? <p className="audit-verify audit-verify--ok"><span aria-hidden="true">{"✓"}</span> Chain verified: {verify.length} entr{verify.length === 1 ? "y" : "ies"}, head #{verify.headSeq}, {shortHash(verify.headHash)}. Every entry links to the one before it.</p>
+          : <p className="audit-verify audit-verify--bad" role="alert"><span aria-hidden="true">{"✕"}</span> TAMPERED: the chain fails at entry #{verify.firstBadSeq}: {REASONS[verify.reason] || verify.reason}.</p>)}
       </div>
       {shown.length === 0 ? <p className="muted">Nothing recorded yet.</p> : (
         <div className="table-wrap" role="region" aria-label="Audit entries (scrolls sideways)" tabIndex={0}>

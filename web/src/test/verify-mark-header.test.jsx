@@ -1,5 +1,6 @@
 import React from "react";
 import { render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import App from "../App.jsx";
 
 // The header shows this lab's own Verified / In progress mark, read from the same /api/shelf call the Shelf link makes (through the lab-proxy
@@ -62,4 +63,34 @@ test("the badge line is in App.jsx: removing it fails this test", async () => {
   const path = await import("node:path");
   const src = fs.readFileSync(path.resolve(process.cwd(), "src/App.jsx"), "utf8");
   expect(src).toMatch(/<VerifyMark id="agent-gateway-inspector" \/>/);
+});
+
+// Class clash: the vendored VerifyMark.css styles a generic `.verify` class for the header badge. This lab's own audit chain status line must not use it
+// (its border, padding and bold would restyle the badge, and the badge's flex rules would restyle the line): it is `.audit-verify`.
+test("the audit chain line does not share the badge's `verify` class: exactly one element has it while both are on screen", async () => {
+  fakeApi({ shelfUrl: "http://shelf.example", demos: [{ id: "agent-gateway-inspector", verification: mark("verified", "Verified") }] });
+  render(<App />);
+  const bar = within(await screen.findByTestId("top-menu"));
+  expect(await bar.findByText("Verified")).toBeInTheDocument();
+  await userEvent.click(await screen.findByRole("button", { name: "Verify chain" }));
+  const line = await waitFor(() => {
+    const el = document.querySelector(".audit-verify--ok");
+    expect(el).not.toBeNull();
+    return el;
+  });
+  expect(line).toHaveClass("audit-verify");
+  expect(line).not.toHaveClass("verify");
+  expect(document.querySelectorAll(".verify")).toHaveLength(1);
+  expect(bar.getByText("Verified").closest(".verify")).not.toBeNull();
+  expect(screen.getByTestId("verify-result")).toHaveTextContent(/Chain verified/);
+});
+
+test("this lab's app.css and AuditPanel.jsx do not define or use the bare `.verify` classes (they belong to the vendored badge)", async () => {
+  const fs = await import("node:fs");
+  const path = await import("node:path");
+  const css = fs.readFileSync(path.resolve(process.cwd(), "src/app.css"), "utf8");
+  expect(css).not.toMatch(/(^|[\s,}])\.verify(--[a-z]+|__[a-z]+)?\s*[{,:[]/m);
+  expect(css).toMatch(/\.audit-verify\s*\{/);
+  const panel = fs.readFileSync(path.resolve(process.cwd(), "src/components/AuditPanel.jsx"), "utf8");
+  expect(panel).not.toMatch(/className="(?:[^"]*\s)?verify(?:--[a-z]+)?(?:\s|")/);
 });
