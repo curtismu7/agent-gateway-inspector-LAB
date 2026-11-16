@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Verification mark in the header: the shared `VerifyMark` (vendored byte for byte from AI-DEMO-Standalone `shared/verify-mark`, pinned) shows this lab's Verified / In progress mark from the demo shelf, inside the top menu next to the Shelf link. It makes the same `GET /api/shelf` call the Shelf link makes, so it shows through the lab-proxy and nothing when the lab is opened on its own port, when the shelf has no mark for it, or when the shelf is unreachable.
 - Rule 17: the Diagram tab is drawn from diagram-studio/1 data, not hand-built nodes and edges. Two files in `server/diagrams/` (wide, and the two-column narrow layout) are validated when the server starts and served by name at `GET /api/diagrams/:name` (strict allow-list, JSON 404 that does not echo the name); `Flow.jsx` fetches them and renders through React Flow. Same boxes, arrows, positions, six steps, Simulate, Speed, Reset and header Reset as before. The Docker image copies `server/diagrams`; `npm run doctor` checks the files.
 
 ## 0.2.0 (the -LAB standard; local only, clean history from the old repo's main)

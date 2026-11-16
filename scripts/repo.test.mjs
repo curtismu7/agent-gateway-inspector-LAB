@@ -77,6 +77,7 @@ test('the CI workflow is GitHub-hosted, Node 26 only, and carries the forbidden-
 test('the repo ships no k8s manifests, no deploy scripts, no hosted mode, no workspace header and no bare MODE', () => {
   for (const d of ['k8s', 'deploy', 'server/src/workspaces.js']) assert.ok(!fs.existsSync(path.join(root, d)), d);
   const skip = new Set(['node_modules', 'dist', '.git', 'package-lock.json']);
+  // The vendored shared VerifyMark.jsx only mentions X-Workspace-Id in a doc comment (labs that send one pass it as `headers`); it is never edited here.
   const hits = [];
   const walk = (dir) => {
     for (const name of fs.readdirSync(dir)) {
@@ -85,7 +86,7 @@ test('the repo ships no k8s manifests, no deploy scripts, no hosted mode, no wor
       if (fs.statSync(p).isDirectory()) walk(p);
       else if (/\.(m?jsx?|json|ya?ml|html|css)$/.test(name) || name === 'Dockerfile') {
         const t = fs.readFileSync(p, 'utf8');
-        if (/process\.env\.MODE\b|se-mock|SE_HOST|__IMAGE__|X-Workspace-Id|VITE_BASE_PATH/.test(t) && !/\.test\.m?jsx?$/.test(p)) hits.push(path.relative(root, p));
+        if (/process\.env\.MODE\b|se-mock|SE_HOST|__IMAGE__|X-Workspace-Id|VITE_BASE_PATH/.test(t) && !/\.test\.m?jsx?$/.test(p) && !p.endsWith(path.join('components', 'VerifyMark.jsx'))) hits.push(path.relative(root, p));
       }
     }
   };
