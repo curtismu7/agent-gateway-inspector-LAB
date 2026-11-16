@@ -73,7 +73,7 @@ dd { margin: 0; overflow-wrap: anywhere; }
 .pause h3 { margin-top: 4px; }
 
 .untrusted { font-family: var(--font-mono); font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }
-.untrusted--block { display: block; margin: 4px 0; padding: 8px; border: 1px dashed var(--border); border-radius: 8px; background: var(--bg); max-height: 256px; overflow: auto; }
+.untrusted--block { display: block; margin: 4px 0; padding: 8px; border: 1px dashed var(--border); border-radius: 8px; background: var(--bg); }
 mark { background: var(--accent-soft); color: var(--text); padding: 0 2px; border-radius: 3px; text-decoration: underline wavy var(--danger-text); text-underline-offset: 3px; }
 .untrusted .chip { border-color: var(--danger-text); background: var(--accent-soft); color: var(--danger-text); font: 12px var(--font-mono); padding: 0 4px; border-radius: 4px; }
 
