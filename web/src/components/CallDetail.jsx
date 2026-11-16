@@ -70,6 +70,7 @@ export default function CallDetail({ call, headingRef, busy, onDecide, onRetry, 
       </dl>
       {call.layers && <ScopeStrip layers={call.layers} claims={call.claims} />}
       <h3>Arguments <span className="muted small">(shown as text; hidden characters are made visible)</span></h3>
+      {/* ui-pattern: allow J1 the marked view keeps instruction and hidden-character marks a JsonPane cannot show; the JsonPane follows (owner kept it, 2026-11-15) */}
       <Untrusted text={call.args === null ? "(not an object the gateway accepts)" : pretty(call.args)} block />
       {call.args !== null && <Json value={call.args} label="Arguments" hot={HOT} />}
 
@@ -128,6 +129,7 @@ export default function CallDetail({ call, headingRef, busy, onDecide, onRetry, 
           <h3>Upstream answer</h3>
           {call.upstream.ok === false
             ? <p>The upstream did not answer: <Untrusted text={call.upstream.error || "error"} plain /></p>
+            /* ui-pattern: allow J1 the marked view keeps instruction and hidden-character marks a JsonPane cannot show; the JsonPane follows (owner kept it, 2026-11-15) */
             : call.upstream.result !== undefined ? <><Untrusted text={pretty(call.upstream.result)} block /><Json value={call.upstream.result} label="Upstream answer" hot={HOT} /></> : <p className="muted">Forwarded; the answer is shown in the detail view only.</p>}
         </>
       )}
