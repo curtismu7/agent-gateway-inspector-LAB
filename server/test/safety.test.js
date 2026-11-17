@@ -135,7 +135,8 @@ test('source scan: only upstreams.js opens connections; no child process, no fet
   for (const f of files) {
     const code = fs.readFileSync(path.join(srcDir, f), 'utf8').split('\n').filter((l) => !/^\s*\/\//.test(l)).join('\n');
     assert.doesNotMatch(code, /child_process|(?<![.\w])exec(Sync)?\(|\bspawn\(|\beval\(|new Function\(/, `${f}: no process or code execution`);
-    assert.doesNotMatch(code, /\bfetch\(/, `${f}: no fetch`);
+    // gatewayReal.js is the one real outbound (the Privilege gateway hop); upstreams.js is the only other connection opener.
+    if (f !== 'gatewayReal.js') assert.doesNotMatch(code, /\bfetch\(/, `${f}: no fetch`);
     assert.doesNotMatch(code, /from 'node:(dns|tls|https|net|dgram)'/, `${f}: no other network modules`);
     if (f !== 'upstreams.js' && f !== 'app.js') assert.doesNotMatch(code, /node:http'|\.request\(/, `${f}: only upstreams.js makes requests`);
     assert.doesNotMatch(code, /process\.env\.(?!GATEWAY_INSPECTOR_)/, `${f}: only GATEWAY_INSPECTOR_* settings are read`);

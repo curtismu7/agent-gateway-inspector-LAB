@@ -227,21 +227,21 @@ Dockerfile, docker-compose.yml   loopback-only publish (OrbStack: HOST_PORT=5850
 
 ## Real mode: through the PingOne Privilege gateway
 
-Real mode here is one live call through the SE PingOne Privilege gateway
-(`https://mcpgw.ai-demo.ping-devops.com`) with an agent access key from the shared settings
+Real mode here is one live call through a PingOne Privilege gateway
+(the origin you set in `AGI_GW_URL`) with an agent access key from the shared settings
 file (`~/Development/.env`, or the file `STANDALONE_ENV` names).
 
 **Privilege objects this lab uses:**
 
 | Object | Value |
 |---|---|
-| Gateway | `mcpgw.ai-demo.ping-devops.com` (cluster `ai-demo-cmuir`) |
-| Door (Agentic App) | `aggregate-limited` — client path `/aggregate-limited/mcp` |
+| Gateway | the origin in `AGI_GW_URL` (a PingOne Privilege gateway you can reach) |
+| Agentic App | one named in `AGI_GW_APPS` (for example `aggregate-limited`), client path `/<app>/mcp` |
 | Caller | agent access key `AGI_GW_KEY_LAB_AGENT` (write-only, never shown) |
 | Backend | `aggregate` = the gateway's MCP aggregate over `opensearch` (9 tools) + `banking-mcp` (33 tools); `aggregate-limited` = the same members with a tool filter |
 
 **What runs in Real:** the **Privilege gateway check** (`POST /api/gateway-check`, card on the
-page) — one live `tools/list` through the door with the key, then one `tools/call` probe of a
+page) — one live `tools/list` through the Agentic App with the key, then one `tools/call` probe of a
 tool no policy grants, so you see the gateway's own refusal shape. The gateway's words come
 back unaltered (keys scrubbed). Settings keys: `AGI_GW_URL`, `AGI_GW_APPS`,
 `AGI_GW_KEY_<NAME>` (optional `AGI_GW_VERSION`).

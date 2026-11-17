@@ -27,7 +27,7 @@ test('every npm script and source file the docs name exists', () => {
 
 test('every API route the README names exists in app.js', () => {
   const app = read('server/src/app.js');
-  for (const m of read('README.md').matchAll(/`(GET|POST) \/api\/([\w/:]+)/g)) {
+  for (const m of read('README.md').matchAll(/`(GET|POST) \/api\/([\w:\-\/]+)/g)) {
     const route = `/${m[2].replace(/\/$/, '')}`.replace(/\/:\w+/g, '/:');
     const pattern = route.split('/').filter(Boolean).map((seg) => (seg === ':' ? ':\\w+' : seg)).join('/');
     assert.match(app, new RegExp(`'/${pattern}'`), `app.js has no ${m[1]} ${route}`);
