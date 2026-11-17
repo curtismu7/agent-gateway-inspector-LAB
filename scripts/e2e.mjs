@@ -54,11 +54,12 @@ try {
 
   await page.getByRole('button', { name: 'Run', exact: true }).and(page.locator(':enabled')).waitFor();
 
-  // Keyboard only: skip link first, then Tab to Run, press Enter on the default scenario (benign).
+  // Keyboard only: skip link first, then Tab to Run, press Enter on the default scenario (benign). The Privilege gateway
+  // card sits between the header and the picker, so the Run button is a few Tab stops further in.
   await page.keyboard.press('Tab');
   check((await active()).includes('Skip to content'), 'first Tab stop is the skip link');
   let reached = false;
-  for (let i = 0; i < 14 && !reached; i++) { await page.keyboard.press('Tab'); reached = (await active()).endsWith('|Run'); }
+  for (let i = 0; i < 20 && !reached; i++) { await page.keyboard.press('Tab'); reached = (await active()).endsWith('|Run'); }
   check(reached, 'Tab reaches the Run button');
   await page.keyboard.press('Enter');
   await runDone(/^Ran "Benign call"/);
