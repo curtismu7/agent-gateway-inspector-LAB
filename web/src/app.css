@@ -1,7 +1,7 @@
 /* App layout only. Colours, fonts, controls, the banner and the dark theme come from styles/standalone-ui.css (loaded first).
    Tokens only here: no colour literals, no dark-mode media queries, no forced priority, breakpoints 600px and 900px only.
    Decisions are never carried by colour alone: every status has a word and a glyph beside it. */
-.app { max-width: 1312px; margin: 0 auto; padding: 0 0 32px; }
+.app { max-width: 2200px; margin: 0 auto; padding: 0 0 32px; }
 .app[data-presenter="on"] { font-size: 18px; }
 .app[data-presenter="on"] .muted { font-size: 16px; }
 .page { padding: 0; }
