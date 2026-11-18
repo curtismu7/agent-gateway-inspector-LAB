@@ -2,6 +2,8 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import ShelfLink from "./components/ShelfLink.jsx";
 import VerifyMark from "./components/VerifyMark.jsx";
 import TopMenu, { applyFontSize } from "./top-menu/TopMenu.jsx";
+import TalkTrackDialog from "./talk-track/TalkTrackDialog.jsx";
+import talkMd from "../../docs/talk-track.md?raw";
 import { decide, getAudit, getCall, getCalls, getHealth, getInfo, getScenarios, postMode, postReset, retryCall, runScenario, verifyAudit } from "./lib/api.js";
 import { DECISION, ERROR_TEXT, REASON } from "./lib/status.js";
 import CallList from "./components/CallList.jsx";
@@ -57,6 +59,15 @@ function TracePanel({ traces, source }) {
 
 export default function App() {
   const [theme, setTheme] = useState(initialTheme);
+  const [talkOpen, setTalkOpen] = useState(false);
+  const talkSteps = (() => {
+    const steps = []; let n = 0;
+    for (const line of talkMd.split("\n")) {
+      const m = line.match(/^\d+\.\s+(?:"(.+?)"|\*\*(.+?)\.\*\*\s*(.*))$/);
+      if (m) { n += 1; steps.push({ id: `s${n}`, title: (m[1] || m[2]).slice(0, 60), say: m[1] || m[3] }); }
+    }
+    return steps.length ? steps : [{ id: "s1", title: "Talk track", say: talkMd.slice(0, 600) }];
+  })();
   const [fontStep, setFontStep] = useState(initialFont);
   const [mode, setMode] = useState("mock"); // mock until the server says live can be selected; it never does
   const [info, setInfo] = useState(null);
@@ -247,6 +258,7 @@ export default function App() {
             theme={presenter ? undefined : { value: theme, onChange: setThemePersist }}
             fontSize={{ value: fontStep, onChange: setFontStep }}
             present={{ active: presenter, onToggle: () => setPresenter((v) => !v), label: "Presenter" }}
+            talkTrack={{ active: talkOpen, onToggle: () => setTalkOpen((v) => !v) }}
             help={{ href: "https://github.com/curtismu7/agent-gateway-inspector-LAB#readme" }}
             version={info?.version || null}
             onReset={presenter ? undefined : reset}
@@ -299,6 +311,8 @@ export default function App() {
         )}
         <Story active={view === "diagram" ? storyNow : -1} />
       </main>
+      <TalkTrackDialog isOpen={talkOpen} onClose={() => setTalkOpen(false)} talk={talkSteps} />
+
     </div>
   );
 }
