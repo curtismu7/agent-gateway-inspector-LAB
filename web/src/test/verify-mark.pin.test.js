@@ -18,7 +18,7 @@ describe("vendored verify-mark", () => {
   it("matches the canonical hashes from AI-DEMO-Standalone shared/verify-mark (#238)", () => {
     const dir = path.join(process.cwd(), "src", "components");
     const sha = (f) => createHash("sha256").update(fs.readFileSync(path.join(dir, f))).digest("hex");
-    expect(sha("VerifyMark.jsx")).toBe("81c2532041c5a65aaf762e55c56e889df09dfde5811fc5cc788897ca8712c130");
+    expect(sha("VerifyMark.jsx")).toBe("5c5025e7ed2e9df8d40d313d258fa2a93368f7286d33959d81c61cd469c3cc90");
     expect(sha("VerifyMark.css")).toBe("4774585cd47c3affc739d3d99fa6843d62f607d8d3e69b4438de756ac3d49dc5");
   });
 

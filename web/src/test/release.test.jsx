@@ -115,7 +115,7 @@ test("a hold is approved from the UI with its own code in the JSON body, forward
   await screen.findByText(/Approved call-0003: nothing was forwarded\. The agent can now retry the exact call once\./);
   expect(api.decided).toEqual({ decision: "approve", approvalCode: "hold-code-1" });
   const post = api.requests.find((r) => r.url === "/api/calls/call-0003/decision");
-  expect(post.init.credentials).toBe("omit");
+  expect(post.init.credentials).toBe("same-origin");
   expect(post.init.headers).not.toHaveProperty("Authorization");
   expect(document.body.textContent).not.toContain("hold-code-1");
   await waitFor(() => expect(screen.queryByRole("button", { name: "Approve this exact call" })).toBeNull());

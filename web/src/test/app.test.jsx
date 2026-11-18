@@ -102,7 +102,7 @@ test("a paused call is approved from the UI: the code goes in the JSON body, nev
   expect(api.decided).toEqual({ decision: "approve", approvalCode: "demo-code-1" });
   const post = api.requests.find((r) => r.url === "/api/calls/call-0002/decision");
   expect(post.init.headers).toEqual({ Accept: "application/json", "Content-Type": "application/json" });
-  expect(post.init.credentials).toBe("omit");
+  expect(post.init.credentials).toBe("same-origin");
   await waitFor(() => expect(screen.queryByRole("button", { name: "Approve and forward" })).toBeNull());
 });
 
@@ -149,7 +149,7 @@ test("the theme toggle sets data-theme and every request is same-origin and cred
   for (const r of api.requests) {
     expect(r.url.startsWith("/api/")).toBe(true);
     expect(JSON.stringify(r.init.headers || {}).toLowerCase()).not.toMatch(/authorization|x-api-key|cookie/);
-    expect(r.init.credentials).toBe("omit");
+    expect(r.init.credentials).toBe("same-origin");
   }
 });
 

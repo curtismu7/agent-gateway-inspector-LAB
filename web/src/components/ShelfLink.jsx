@@ -23,7 +23,7 @@ export default function ShelfLink({ url, traceparent, headers, path = "/api/shel
     if (url) { setHref(url); return undefined; }
     let alive = true;
     const extra = typeof headers === "function" ? headers() : (headers ?? {});
-    const init = { credentials: "omit", headers: { Accept: "application/json", ...extra, ...(traceparent ? { traceparent: traceparent() } : {}) } };
+    const init = { credentials: "same-origin", headers: { Accept: "application/json", ...extra, ...(traceparent ? { traceparent: traceparent() } : {}) } };
     fetch(path, init)
       .then((r) => (r.ok ? r.json() : null))
       .then((d) => { if (alive && d?.shelfUrl) setHref(d.shelfUrl); })
