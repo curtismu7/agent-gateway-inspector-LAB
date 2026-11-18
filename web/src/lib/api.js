@@ -2,7 +2,7 @@
 // A POST body is JSON, the only body type the server accepts.
 
 async function call(path, method = "GET", body) {
-  const init = { method, headers: { Accept: "application/json" }, credentials: "omit" };
+  const init = { method, headers: { Accept: "application/json" }, credentials: "same-origin" };
   if (body !== undefined) { init.headers["Content-Type"] = "application/json"; init.body = JSON.stringify(body); }
   const res = await fetch(path, init);
   let data = null;

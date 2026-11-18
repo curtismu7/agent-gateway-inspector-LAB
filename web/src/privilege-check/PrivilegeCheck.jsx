@@ -20,14 +20,14 @@ export default function PrivilegeCheck({ apiBase = '', title = 'Privilege gatewa
   const refresh = useCallback(async () => {
     setState({ phase: 'checking' });
     try {
-      const info = await fetch(`${apiBase}/api/info`, { credentials: 'omit', headers: { accept: 'application/json' } }).then((r) => r.json());
+      const info = await fetch(`${apiBase}/api/info`, { credentials: 'same-origin', headers: { accept: 'application/json' } }).then((r) => r.json());
       if (!info.realAvailable) {
         setState({ phase: 'not-configured', reason: info.realReason || info.realHowTo || 'Real is not configured.' });
         return;
       }
       const res = await fetch(`${apiBase}/api/gateway-check`, {
         method: 'POST',
-        credentials: 'omit',
+        credentials: 'same-origin',
         headers: { 'content-type': 'application/json', accept: 'application/json' },
         body: '{}',
       });
