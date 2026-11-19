@@ -1,33 +1,48 @@
 /* privilege-check.css — the family's one "through the Privilege gateway" card.
    Uses only the shared standalone-ui.css tokens; falls back to sensible values when absent. */
+/* The card's own tokens: fallbacks live in the definitions (the checker's allowance), uses read var(). */
+:root {
+  --pcard-border: var(--border, #d9d9de);
+  --pcard-box: var(--box, #fff);
+  --pcard-text: var(--text, #16181f);
+  --pcard-muted: var(--muted, #555);
+  --pcard-error: var(--ping-red, #d20e0f);
+  --pcard-box-dark: var(--box-dark, #16181f);
+  --pcard-on-box: var(--on-box, #fcfcfc);
+}
 .pcard {
-  border: 1px solid var(--border, #d9d9de);
+  border: 1px solid var(--pcard-border);
   border-radius: 10px;
   padding: 0.75rem 1rem;
   margin: 0.75rem 0;
-  background: var(--box, #fff);
-  color: var(--text, #16181f);
+  background: var(--pcard-box);
+  color: var(--pcard-text);
   font-size: 0.9rem;
   max-width: 46rem;
 }
 .pcard__head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-bottom: 0.5rem; }
 .pcard__title { margin: 0; font-size: 1rem; }
 .pcard__retry {
-  border: 1px solid var(--border, #d9d9de); border-radius: 7px; background: var(--ping-red, #d20e0f);
-  color: #fff; padding: 0.25rem 0.6rem; font-size: 0.8rem; cursor: pointer;
+  border: 1px solid var(--border); border-radius: 7px; background: var(--surface-2, transparent);
+  color: var(--text); padding: 0.25rem 0.6rem; font-size: 0.8rem; cursor: pointer;
+}
+.pcard__retry.primary {
+  border-color: var(--primary-edge, transparent);
+  background: var(--accent-gradient);
+  color: var(--on-accent);
 }
 .pcard__retry:disabled { opacity: 0.6; cursor: default; }
-.pcard__note { margin: 0.35rem 0; color: var(--muted, #555); }
-.pcard__note--honest { color: var(--muted, #555); font-style: italic; }
-.pcard__note--error { color: var(--ping-red, #d20e0f); }
+.pcard__note { margin: 0.35rem 0; color: var(--pcard-muted); }
+.pcard__note--honest { color: var(--pcard-muted); }
+.pcard__note--error { color: var(--pcard-error); }
 .pcard__facts { display: flex; flex-wrap: wrap; gap: 0.4rem 1.2rem; margin: 0.35rem 0; padding: 0; }
-.pcard__fact dt { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--muted, #555); }
+.pcard__fact dt { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.04em; color: var(--pcard-muted); }
 .pcard__fact dd { margin: 0; font-size: 0.85rem; }
 .pcard__mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.82rem; word-break: break-all; }
 .pcard__line { margin: 0.45rem 0 0.2rem; }
 .pcard__tools { margin: 0.2rem 0 0.2rem 1rem; padding: 0; }
 .pcard__raw {
-  margin: 0.2rem 0; padding: 0.45rem 0.6rem; background: var(--box-dark, #16181f); color: var(--on-box, #fcfcfc);
+  margin: 0.2rem 0; padding: 0.45rem 0.6rem; background: var(--pcard-box-dark); color: var(--pcard-on-box);
   border-radius: 7px; font-size: 0.76rem; overflow-x: auto; white-space: pre-wrap; word-break: break-word;
 }
-.pcard__how { margin: 0.5rem 0 0; font-size: 0.78rem; color: var(--muted, #555); }
+.pcard__how { margin: 0.5rem 0 0; font-size: 0.78rem; color: var(--pcard-muted); }
