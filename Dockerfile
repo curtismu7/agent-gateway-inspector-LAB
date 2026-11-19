@@ -8,6 +8,7 @@ COPY server/package.json server/
 COPY web/package.json web/
 RUN npm ci --ignore-scripts -w web --include-workspace-root=false && npm cache clean --force
 COPY web web
+COPY docs docs
 RUN npm run build -w web
 
 FROM node:26-alpine

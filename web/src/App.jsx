@@ -276,6 +276,7 @@ export default function App() {
 
         <PrivilegeCheck />
         <section className="card picker" aria-label="Run a scenario">
+          <h2 className="picker__title"><span className="step-num" data-n="1" aria-hidden="true"></span>Run a scenario</h2>
           <label htmlFor="scenario-select">Scenario</label>
           <div className="picker__field">
             <select id="scenario-select" value={scenarioId} onChange={(e) => setScenarioId(e.target.value)} disabled={!scenarios.length}>
@@ -298,7 +299,7 @@ export default function App() {
           <>
             <div className="workspace">
               <section aria-labelledby="calls-title" className="listcol">
-                <h2 id="calls-title">Calls <span className="muted small">{calls.length} in the buffer</span></h2>
+                <h2 id="calls-title"><span className="step-num" data-n="3" aria-hidden="true"></span>Calls <span className="muted small">{calls.length} in the buffer</span></h2>
                 <CallList calls={calls} selectedId={selectedId} onSelect={select} />
               </section>
               <CallDetail call={detail} headingRef={detailHeading} busy={busy} onDecide={answer} onRetry={agentRetry} error={detailError} />
@@ -306,10 +307,13 @@ export default function App() {
             <AuditPanel entries={audit.entries} size={audit.size} verify={verify} onVerify={doVerify} busy={busy} />
           </>
         ) : (
-          <Flow run={lastRun} auditSize={audit.size} callCount={calls.length} scenarioTitle={scenario?.title} theme={theme} busy={busy}
-            onSimulate={() => run(false)} onStep={setStoryNow} resetSignal={resetSignal} />
+          <div className="duo">
+            <Flow run={lastRun} auditSize={audit.size} callCount={calls.length} scenarioTitle={scenario?.title} theme={theme} busy={busy}
+              onSimulate={() => run(false)} onStep={setStoryNow} resetSignal={resetSignal} />
+            <Story active={storyNow} />
+          </div>
         )}
-        <Story active={view === "diagram" ? storyNow : -1} />
+        {view !== "diagram" && <Story active={-1} />}
       </main>
       <TalkTrackDialog isOpen={talkOpen} onClose={() => setTalkOpen(false)} talk={talkSteps} />
 

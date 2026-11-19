@@ -14,7 +14,7 @@ export default function AuditPanel({ entries, size, verify, onVerify, busy }) {
   return (
     <section className="card audit" aria-labelledby="audit-title">
       <div className="audit__head">
-        <h2 id="audit-title">Audit trail <span className="muted small">{size} entr{size === 1 ? "y" : "ies"}, append-only</span></h2>
+        <h2 id="audit-title"><span className="step-num" data-n="4" aria-hidden="true"></span>Audit trail <span className="muted small">{size} entr{size === 1 ? "y" : "ies"}, append-only</span></h2>
         <button type="button" className="btn" onClick={onVerify} disabled={busy}>Verify chain</button>
       </div>
       <div role="status" aria-live="polite" data-testid="verify-result" className="verify-slot">

@@ -31,6 +31,17 @@ html { font-size: var(--fs, 16px); }
 select { min-width: 0; }
 
 .scan-status { min-height: 24px; margin: 8px 0; font-weight: 700; }
+/* Numbered story badge next to section headings (UI-RELAYOUT-PATTERN.md): digit comes from data-n, so heading text is unchanged. */
+.step-num { display: inline-grid; place-items: center; min-width: 22px; height: 22px; border-radius: 50%;
+  background: var(--accent-gradient); color: var(--on-accent); font: 700 12px var(--font-mono);
+  margin-right: 8px; vertical-align: 2px; }
+.step-num::before { content: attr(data-n); }
+/* Paired panels (diagram + story strip) share one row; stack when narrow (UI-RELAYOUT-PATTERN.md rule 4). */
+.duo { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.duo > * { min-width: 0; }
+@media (max-width: 900px) { .duo { grid-template-columns: minmax(0, 1fr); } }
+/* Story strip: the walkthrough reads as one stacked column (UI-RELAYOUT-PATTERN.md rule 2). */
+.picker__title { margin: 0 0 4px; flex-basis: 100%; }
 .card { padding: 16px; margin: 16px 0; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); }
 .alert { padding: 8px 12px; border-radius: 8px; background: var(--accent-soft); color: var(--danger-text); border: 1px solid var(--danger-text); }
 .empty { text-align: center; padding: 16px; border: 1px dashed var(--border); border-radius: 10px; }
@@ -90,7 +101,7 @@ mark { background: var(--accent-soft); color: var(--text); padding: 0 2px; borde
 .inv tbody th { font-weight: 400; }
 .inv td.mono, .inv tbody th { white-space: nowrap; }
 
-.story ol { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 208px), 1fr)); gap: 10px; list-style: none; padding: 0; margin: 16px 0; }
+.story ol { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; list-style: none; padding: 0; margin: 16px 0; }
 .story li { display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; border: 1px solid var(--border); border-left: 4px solid var(--border); border-radius: 8px; background: var(--surface); font-size: 14px; }
 .story li[aria-current="step"] { border-color: var(--focus); border-left-color: var(--focus); box-shadow: 0 0 0 2px var(--focus); }
 .story span { color: var(--muted); }
