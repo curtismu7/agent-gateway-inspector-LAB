@@ -108,7 +108,7 @@ export default function GatewayTrace({ exchanges, source, title = "What Privileg
   const list = Array.isArray(exchanges) ? exchanges : [];
   return (
     <section className="gw-trace" data-testid="gateway-trace" aria-label={title}>
-      <h2><span className="step-num" data-n="2" aria-hidden="true"></span>{title}</h2>
+      <h2>{title}</h2>
       <p className="gw-lead">
         Every request the agent sent to the Privilege gateway, exactly what came back, and the decisions the gateway
         made in between.
