@@ -8,7 +8,7 @@ import { forwardTo, startUpstreams } from './upstreams.js';
 import { createRunLog } from './runObs.js';
 import { getScenario, runScenario } from './scenarios.js';
 
-// log: where the one-line-per-row decision log goes (stdout by default); tests inject one.
+// log: where the one-line-per-row decision log goes. Silent by default (so tests stay quiet); the boot path in app.js passes the stdout writer.
 export async function createRuntime({ stubBase = STUB_BASE_PORT, now, sleep, upstreamTimeoutMs, log } = {}) {
   const upstreams = await startUpstreams({ basePort: stubBase });
   const runLog = createRunLog({ write: log, clock: now });

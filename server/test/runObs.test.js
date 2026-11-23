@@ -2,11 +2,12 @@
 // Mock rows are what the stub gateway's audit entries say; Real rows are the replies of one gateway check, here from a fake door on loopback.
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import http from 'node:http';
 import { createApp } from '../src/app.js';
 import { createGateway } from '../src/gateway.js';
 import { createRuntime } from '../src/runtime.js';
-import { KEEP_RUNS, MAX_RUN_ROWS, createRunLog, decisionLine, gatewayCheckEvents, lineValue, rowsOf } from '../src/runObs.js';
+import { KEEP_RUNS, MAX_RUN_ROWS, createRunLog, decisionLine, gatewayCheckEvents, lineValue, rowsOf, stdoutLine } from '../src/runObs.js';
 import { assertRunObservability, classify, layerMatchers } from '../src/runObservability.js';
 import { SCENARIOS } from '../src/scenarios.js';
 import { fakeClock, fakeForward } from './fixtures.js';
@@ -76,25 +77,29 @@ test('outcomes: a refusal is refused, a cap is blocked, a hold is information, a
   const get = async (id, opts) => rec(rt, (await rt.runScenario(id, opts)).runId);
 
   const benign = await get('benign');
-  assert.deepEqual(benign.rows.map((r) => [r.layer, r.outcome]), [['agent', 'allowed'], ['person', 'allowed'], ['privilege', 'allowed'], ['gateway', 'allowed'], ['resource', 'info']]);
-  assert.deepEqual(benign.record.summary, { allowed: 4, refused: 0, blocked: 0, info: 1, unverified: 0 });
+  assert.deepEqual(benign.rows.map((r) => [r.layer, r.outcome]), [['agent', 'allowed'], ['person', 'allowed'], ['privilege', 'allowed'], ['gateway', 'info'], ['resource', 'info']]);
+  assert.deepEqual(benign.record.summary, { allowed: 3, refused: 0, blocked: 0, info: 2, unverified: 0 }, 'three checks passed, and the gateway row is the same decision seen at the gateway');
 
   const scope = await get('scope-exceeding');
-  assert.deepEqual(scope.rows.map((r) => [r.layer, r.outcome]), [['agent', 'allowed'], ['privilege', 'refused'], ['gateway', 'refused']], 'no end-user row: that layer was never reached');
+  assert.deepEqual(scope.rows.map((r) => [r.layer, r.outcome]), [['agent', 'allowed'], ['privilege', 'refused'], ['gateway', 'info']], 'no end-user row: that layer was never reached');
+  assert.deepEqual(scope.record.summary, { allowed: 1, refused: 1, blocked: 0, info: 1, unverified: 0 }, 'one refused call is ONE refusal (the registry check passed, the gateway row is information)');
   assert.deepEqual(outcomes(scope.rows, 'privilege'), ['refused']);
   assert.match(byLayer(scope.rows, 'privilege')[0].message, /Layer 3 \(action\): the agent does not hold payments:write/);
-  assert.deepEqual(outcomes(scope.rows, 'gateway'), ['refused']);
+  assert.deepEqual(outcomes(scope.rows, 'gateway'), ['info']);
+  assert.match(byLayer(scope.rows, 'gateway')[0].message, /decision above seen at the gateway, not a second refusal/);
   assert.equal(byLayer(scope.rows, 'resource').length, 0);
   assert.equal(scope.record.coverage.resource, 'not-logged');
   assert.match(scope.record.reasons.resource, /No call of this run was forwarded/);
 
   const endUser = await get('end-user-denied');
-  assert.deepEqual(endUser.rows.map((r) => [r.layer, r.outcome]), [['agent', 'allowed'], ['person', 'refused'], ['gateway', 'refused']]);
+  assert.deepEqual(endUser.rows.map((r) => [r.layer, r.outcome]), [['agent', 'allowed'], ['person', 'refused'], ['gateway', 'info']]);
+  assert.deepEqual(endUser.record.summary, { allowed: 1, refused: 1, blocked: 0, info: 1, unverified: 0 });
   assert.match(byLayer(endUser.rows, 'person')[0].message, /user-analyst does not hold payments:write.*nobody signed in/);
 
   const burst = await get('rate-burst');
-  assert.deepEqual(outcomes(burst.rows, 'gateway'), [...Array(5).fill('allowed'), ...Array(2).fill('blocked')], 'the rate limit is the lab\'s own cap: blocked');
-  assert.deepEqual(outcomes(burst.rows, 'privilege').slice(-2), ['blocked', 'blocked']);
+  assert.deepEqual(outcomes(burst.rows, 'gateway'), Array(7).fill('info'), 'the gateway row only repeats the policy engine\'s decision');
+  assert.deepEqual(outcomes(burst.rows, 'privilege').slice(-2), ['blocked', 'blocked'], 'the rate limit is the lab\'s own cap: blocked');
+  assert.deepEqual(burst.record.summary, { allowed: 19, refused: 0, blocked: 2, info: 12, unverified: 0 }, 'seven registry checks, seven end-user checks, five allows; two blocked calls are two blocks');
   assert.equal(byLayer(burst.rows, 'resource').length, 5);
 
   const injection = await get('prompt-injection');
@@ -110,7 +115,7 @@ test('outcomes: a refusal is refused, a cap is blocked, a hold is information, a
   const expired = await get('paused-expired');
   assert.deepEqual(outcomes(expired.rows, 'privilege'), ['info', 'info', 'blocked'], 'a lapsed wait fails closed: blocked');
   assert.equal(byLayer(expired.rows, 'resource').length, 0, 'nothing was forwarded');
-  assert.ok(expired.rows.every((r) => !(r.layer === 'gateway' && r.outcome === 'allowed')));
+  assert.ok(expired.rows.every((r) => r.layer !== 'gateway' || r.outcome === 'info'));
 
   // The replay is turned away, never shown as a plain allow.
   const replay = await get('hold-replay-refused');
@@ -164,7 +169,7 @@ test('rows of one instant keep the order the stub computed them in, and a hold i
   assert.deepEqual(rows.map((x) => [x.layer, x.outcome]), [
     ['agent', 'allowed'], ['person', 'allowed'], ['privilege', 'info'], ['gateway', 'info'], ['privilege', 'info'], // the first call: held, approval opened
     ['privilege', 'info'], ['privilege', 'info'], // the human's yes (a grant, not a pass), then the approval spent by the retry
-    ['agent', 'allowed'], ['person', 'allowed'], ['privilege', 'allowed'], ['gateway', 'allowed'], ['resource', 'info'], // the retry
+    ['agent', 'allowed'], ['person', 'allowed'], ['privilege', 'allowed'], ['gateway', 'info'], ['resource', 'info'], // the retry
   ]);
   assert.match(rows[6].message, /^The approval was used by call-\d+/);
 });
@@ -316,10 +321,11 @@ test('a throwing writer, observer or recorder changes nothing: same result, same
     obs = gw;
     obsRun = await gw.handle({ agentId: 'support-bot', tool: 'tickets.read', args: { ticketId: 'T-1' } });
     // A recorder handed garbage
-    assert.equal(createRunLog({ write: () => {} }).recordGatewayCheck({ app: 'x', caller: 'y', startedAt: '2026-11-22T10:00:00.000Z', listing: { ok: false }, listedAt: '2026-11-22T10:00:00.000Z' }), null);
-    // A run that cannot start
+    assert.equal(createRunLog({ write: () => {} }).recordGatewayCheck({ app: 'x', caller: 'y', startedAt: '2026-11-22T10:00:00.000Z', listing: { get ok() { throw new Error('boom'); } }, listedAt: '2026-11-22T10:00:00.000Z' }), null);
+    // A broken clock: the run still starts and the reply still gets a time (the wall clock), and the failure is logged
     const broken = createRunLog({ write: () => {}, clock: () => { throw new Error('clock'); } });
-    assert.equal(broken.begin(), null);
+    assert.match(broken.begin(), /^run-[0-9a-f]{6}-1$/);
+    assert.ok(Number.isFinite(Date.parse(broken.stamp())));
   } finally { console.error = orig; }
   assert.equal(strip(badRun), strip(base));
   assert.deepEqual(bad.rt.gateway.audit.list().map((e) => e.type), clean.rt.gateway.audit.list().map((e) => e.type));
@@ -328,8 +334,8 @@ test('a throwing writer, observer or recorder changes nothing: same result, same
   assert.ok(errors.some((m) => /run log write failed: Error/.test(m)), errors.join('|'));
   assert.ok(errors.some((m) => /run observer failed: E_BOOM: boom/.test(m)));
   assert.ok(errors.some((m) => /recording the gateway check failed/.test(m)));
-  assert.ok(errors.some((m) => /starting the run record failed/.test(m)));
-  assert.equal((await rec(bad.rt, badRun.runId)).record.summary.blocked, 4, 'the rows are kept when only the writer failed');
+  assert.ok(errors.some((m) => /reading the clock failed: Error: clock/.test(m)));
+  assert.equal((await rec(bad.rt, badRun.runId)).record.summary.blocked, 2, 'the rows are kept when only the writer failed');
 });
 
 test('a run keeps at most MAX_RUN_ROWS rows and says it cut some', async () => {
@@ -358,6 +364,7 @@ async function fakeDoor(t, answers = {}) {
       if (m.method === 'notifications/initialized') return res.writeHead(202).end();
       if (m.method === 'initialize') return reply(200, { jsonrpc: '2.0', id: m.id, result: { protocolVersion: '2025-06-18', serverInfo: { name: 'fake-door' }, capabilities: {} } });
       const a = (answers[m.method] ?? (() => ({ status: 200, body: { result: {} } })))(m);
+      if (a.drop) return req.socket.destroy(); // the call never completes
       return reply(a.status, { jsonrpc: '2.0', id: m.id, ...a.body });
     });
   });
@@ -407,7 +414,14 @@ test('the route: empty before a run, one record per run in this mode, ?runId pic
     assert.equal(r.json.error, 'bad_request');
     assert.equal((await get(`/api/run-observability/head?${bad}`)).status, 400, `head ${bad}`);
   }
-  assert.equal((await post('/api/run-observability')).status, 404, 'GET only');
+  for (const path of ['/api/run-observability', '/api/run-observability/head']) {
+    for (const method of ['POST', 'PUT', 'DELETE']) {
+      const r = await request(port, method, path, { body: {} });
+      assert.equal(r.status, 405, `${method} ${path}`);
+      assert.equal(r.headers.allow, 'GET');
+    }
+  }
+  assert.equal((await request(port, 'POST', '/api/audit', { body: {} })).status, 405, 'the same answer the audit routes give');
   const head1 = (await get('/api/run-observability/head')).json;
   await post('/api/reset');
   assert.deepEqual((await get('/api/run-observability')).json, { source: 'mock', record: null, message: 'No run yet: pick a scenario and press Run.' });
@@ -535,8 +549,8 @@ test('Real end to end: a refused list, a 500, a door that is down and a 200 with
   res = (await down.get('/api/run-observability')).json;
   assert.deepEqual(res.record.rows.filter((r) => r.origin !== 'not-logged'), []);
   assert.equal(res.record.coverage.gateway, 'not-logged');
-  assert.match(res.record.reasons.gateway, /no reply to tools\/list/i);
-  assert.deepEqual(res.noReply, ['tools/list got no reply (the call did not complete), so nothing is shown for it']);
+  assert.match(res.record.reasons.gateway, /tools\/list got no reply.*the refusal probe was not sent.*not proof/);
+  assert.deepEqual(res.noReply, ['tools/list got no reply: the lab read it as no connection (a gateway reply with this exact wording would be read the same way), so nothing is shown for it']);
   assert.ok(down.lines.some((l) => / step=tools-list-reply .* result=no-reply cause=no-reply /.test(l)));
 });
 
@@ -547,4 +561,170 @@ test('a scenario run is never a Real run, in either direction', async (t) => {
     assert.equal((await rec(rt, r.runId)).record.source, 'mock', s.id);
     assert.equal(await rt.runLog.record('real', r.runId), null, s.id);
   }
+});
+
+// ---- review fixes ----------------------------------------------------------------------------------------------------------------------
+
+test('one decision is never counted twice: per audit entry at most one refused or blocked row, and every gateway row is information', async (t) => {
+  for (const sc of SCENARIOS) {
+    const { rt } = await mk(t);
+    const r = await rt.runScenario(sc.id);
+    const { rows } = await rec(rt, r.runId);
+    for (const g of byLayer(rows, 'gateway')) assert.equal(g.outcome, 'info', `${sc.id}: the gateway row repeats a decision, it makes none`);
+    const bySeq = new Map();
+    for (const x of rows) bySeq.set(x.detail.auditSeq, [...(bySeq.get(x.detail.auditSeq) ?? []), x]);
+    for (const [seq, group] of bySeq) assert.ok(group.filter((x) => x.outcome === 'refused' || x.outcome === 'blocked').length <= 1, `${sc.id}: audit entry ${seq} is one refusal or block, not two`);
+    await rt.close();
+  }
+});
+
+test('an expiry is stamped when the gateway noticed it and says so: the lapse time is in the row, the row time is the audit time, and nothing is back-dated', async (t) => {
+  const { rt, clock, lines } = await mk(t);
+  // attended pause, lapsed by the scenario's own wait
+  const r = await rt.runScenario('paused-expired');
+  const { rows } = await rec(rt, r.runId);
+  const lapse = byLayer(rows, 'privilege').find((x) => x.detail.noticedAt);
+  assert.equal(lapse.outcome, 'blocked');
+  assert.equal(lapse.detail.lapsedAt, r.calls[0].pause.expiresAt, 'the lapse time is the wait\'s own expiry');
+  assert.equal(lapse.detail.noticedAt, lapse.at);
+  assert.ok(Date.parse(lapse.at) > Date.parse(lapse.detail.lapsedAt), 'noticed after the lapse');
+  assert.match(lapse.message, new RegExp(`^The wait for a human ran out at ${lapse.detail.lapsedAt.replace(/\./g, '\\.')}; the gateway noticed it only now \\(the time of this row\\) and failed closed`));
+  assert.ok(lines.some((l) => l.startsWith(`${lapse.at} `) && / step=approval-lapsed /.test(l)), 'the stdout line carries the row\'s time, not the lapse time');
+  // unattended hold, lapsed long before anything looked
+  const h = await rt.runScenario('hold-unattended', { hold: true });
+  const hold = h.calls[0].hold;
+  clock.advance(10 * 60 * 1000);
+  rt.gateway.get(h.calls[0].id); // the first look after the lapse is what notices it
+  const hr = await rec(rt, h.runId);
+  const noticed = byLayer(hr.rows, 'privilege').find((x) => x.detail.noticedAt);
+  assert.equal(noticed.detail.lapsedAt, hold.expiresAt);
+  assert.ok(Date.parse(noticed.at) - Date.parse(noticed.detail.lapsedAt) > 9 * 60 * 1000, 'minutes late, and the row says so instead of claiming the lapse time');
+  assert.equal(hr.open, false, 'a lapse ends the wait');
+  // an entry with no known lapse time still says it was noticed after the lapse
+  const bare = rowsOf({ seq: 1, at: '2026-11-22T10:00:00.000Z', type: 'pause_expired', callId: 'call-0001', data: { agentId: 'support-bot', tool: 'tickets.read' } });
+  assert.match(bare[0].message, /^The wait for a human had run out when the gateway noticed it \(after the lapse\) and failed closed/);
+  assert.equal(bare[0].detail.lapsedAt, undefined);
+});
+
+test('a lapsed approval presented on a retry is refused (a policy decision on that call); the lapse itself is the lab\'s own stop, blocked', () => {
+  const at = '2026-11-22T10:00:00.000Z';
+  const retry = rowsOf({ seq: 2, at, type: 'decision', callId: 'call-0002', data: { agentId: 'finance-agent', tool: 'payments.transfer', decision: 'deny', reason: 'approval_expired', ruleId: 'pause-large-transfer', requiredScope: 'payments:write', layers: { endUser: 'pass' } } }, { endUser: 'user-manager' });
+  assert.deepEqual(byLayer(retry, 'privilege').map((x) => [x.outcome, x.cause]), [['refused', 'approval-lapsed']]);
+  const lapse = rowsOf({ seq: 1, at, type: 'hold_expired', callId: 'call-0001', data: { agentId: 'finance-agent', tool: 'payments.transfer', ref: 'hold-0123456789abcdef' } }, null, at);
+  assert.deepEqual(lapse.map((x) => [x.outcome, x.cause]), [['blocked', 'no-use-in-time']]);
+});
+
+test('Reset forgets the scenario runs and keeps Real gateway checks, which the stub engine\'s reset has no bearing on', async (t) => {
+  const door = await fakeDoor(t, GOOD);
+  const { get, post } = await boot(t, { env: doorEnv(door.port) });
+  await post('/api/scenarios/benign/run');
+  await post('/api/mode', { source: 'real' });
+  await post('/api/gateway-check');
+  const real = (await get('/api/run-observability')).json.record;
+  assert.equal(real.source, 'real');
+  assert.equal((await post('/api/reset')).status, 200);
+  assert.equal((await get('/api/run-observability')).json.record.runId, real.runId, 'the Real check survives Reset');
+  await post('/api/mode', { source: 'mock' });
+  assert.equal((await get('/api/run-observability')).json.record, null, 'the Mock run does not');
+});
+
+test('a call whose forward is still in flight is not evicted from the ring: its run closes when the tool server answers', async () => {
+  let release; const gate = new Promise((r) => { release = r; });
+  const forward = { portFor: () => 5851, call: async () => { await gate; return { ok: true, result: {} }; } };
+  const log = createRunLog();
+  const gw = createGateway({ forward, ringCap: 1, observe: log.observe, rate: { max: 1000, windowMs: 1000 } });
+  const runId = log.begin();
+  const slow = gw.handle({ agentId: 'support-bot', tool: 'tickets.read', args: { ticketId: 'T-1' }, runId }); // allowed: waiting on the tool server
+  await new Promise((r) => setTimeout(r, 5));
+  await gw.handle({ agentId: 'support-bot', tool: 'payments.transfer', args: { amount: 1, to: 'x' }, runId }); // refused: the ring is over its cap of one
+  assert.equal(gw.get('call-0001', { detail: false }).outcome, 'forwarding', 'the in-flight call is still there');
+  release();
+  await slow;
+  log.executed(runId);
+  assert.equal(log.head('mock', runId).open, false, 'the run is not left open forever');
+  assert.equal(byLayer((await log.record('mock', runId)).record.rows.filter((x) => x.origin !== 'not-logged'), 'resource').length, 1, 'the tool server\'s answer joined the run');
+});
+
+test('a broken clock never breaks a gateway check: the reply still gets a time and the failure is logged', async (t) => {
+  const door = await fakeDoor(t, GOOD);
+  const { rt, get, post } = await boot(t, { env: doorEnv(door.port) });
+  rt.runLog = createRunLog({ write: () => {}, clock: () => { throw new Error('clock'); } });
+  const errors = [];
+  const orig = console.error; console.error = (m) => errors.push(String(m));
+  try {
+    await post('/api/mode', { source: 'real' });
+    assert.equal((await post('/api/gateway-check')).status, 200);
+  } finally { console.error = orig; }
+  const rows = (await get('/api/run-observability')).json.record.rows.filter((r) => r.origin !== 'not-logged');
+  assert.equal(rows.length, 2);
+  assert.ok(rows.every((r) => Number.isFinite(Date.parse(r.at))));
+  assert.ok(errors.some((m) => /reading the clock failed: Error: clock/.test(m)));
+});
+
+test('a reply with no refusal object is read as unreadable information, never a crash', () => {
+  const at = '2026-11-22T10:00:00.000Z';
+  const r = gatewayCheckEvents({ app: 'demo-door', caller: 'tester', listing: { ok: false, ms: 3 }, listedAt: at });
+  assert.deepEqual(r.events.map((e) => [e.outcome, e.cause]), [['info', 'unreadable']]);
+  assert.deepEqual(r.noReply, []);
+  assert.deepEqual(gatewayCheckEvents({ app: 'a', caller: 'c', listing: { ok: true, tools: [{ name: 'x' }], ms: 1 }, listedAt: at, probe: { ok: false, refusal: null, ms: 1 }, probedAt: at }).events.map((e) => [e.step, e.outcome]), [['tools-list-reply', 'allowed'], ['probe-reply', 'info']]);
+});
+
+test('Real: a check whose refusal probe got no reply is visibly partial, and a refused list says the probe was not sent', async (t) => {
+  const dropped = await fakeDoor(t, { ...GOOD, 'tools/call': () => ({ drop: true }) });
+  const a = await boot(t, { env: doorEnv(dropped.port) });
+  await a.post('/api/mode', { source: 'real' });
+  await a.post('/api/gateway-check');
+  const res = (await a.get('/api/run-observability')).json;
+  const rec1 = res.record;
+  assert.deepEqual(assertRunObservability(rec1), []);
+  assert.deepEqual(rec1.rows.filter((r) => r.origin !== 'not-logged').map((r) => [r.layer, r.origin, r.outcome]), [['gateway', 'response', 'allowed']]);
+  assert.equal(rec1.coverage.gateway, 'response');
+  assert.equal(rec1.partial.gateway, true, 'the record says the lane is partial');
+  assert.match(rec1.reasons.gateway, /^Partial check: the refusal probe got no reply.*holds the tools\/list reply only.*not proof/);
+  assert.deepEqual(res.noReply, ['The refusal probe got no reply: the lab read it as no connection (a gateway reply with this exact wording would be read the same way), so nothing is shown for it']);
+  assert.ok(a.lines.some((l) => / step=probe-reply .* result=no-reply cause=no-reply /.test(l)));
+  assert.ok(!a.lines.some((l) => / step=probe-reply .* result=passed /.test(l)), 'a missing reply is never a pass');
+  // the wording does not claim the gateway sent nothing, and a gateway reply with the lab\'s own wording is read the same way
+  assert.ok(!/sent nothing|did not complete/.test(JSON.stringify(res)));
+  const same = gatewayCheckEvents({ app: 'a', caller: 'c', listing: { ok: true, tools: [{ name: 'x' }], ms: 1 }, listedAt: '2026-11-22T10:00:00.000Z', probe: { ok: false, refusal: { status: null, message: 'MCP HTTP request timed out after 1ms' }, ms: 1 }, probedAt: '2026-11-22T10:00:00.000Z' });
+  assert.deepEqual(same.noReply.map((e) => e.step), ['probe-reply']);
+  // a refused list: the probe is never sent, and the lane says so without calling the check partial
+  const refused = await fakeDoor(t, { ...GOOD, 'tools/list': () => ({ status: 401, body: { error: { code: -32001, message: 'bad key' } } }) });
+  const b = await boot(t, { env: doorEnv(refused.port) });
+  await b.post('/api/mode', { source: 'real' });
+  await b.post('/api/gateway-check');
+  const rec2 = (await b.get('/api/run-observability')).json.record;
+  assert.deepEqual(assertRunObservability(rec2), []);
+  assert.equal(rec2.reasons.gateway, 'The refusal probe was not sent, because tools/list did not succeed.');
+  assert.deepEqual(rec2.partial, {});
+  assert.ok(!refused.seen.includes('tools/call'));
+});
+
+test('the order of rows of one instant survives a cut detail (a 20 000 character tool name): the audit sequence is a number the collector never cuts', async () => {
+  const log = createRunLog({ write: () => {}, clock: () => Date.parse('2026-11-22T10:00:00Z') });
+  const runId = log.begin();
+  const at = '2026-11-22T10:00:00.000Z';
+  const data = { agentId: 'support-bot', tool: 'x'.repeat(20_000), decision: 'allow', reason: 'rule_allow', ruleId: 'r', requiredScope: 's', layers: { endUser: 'pass' } };
+  log.observe({ seq: 2, at, type: 'decision', callId: 'call-0002', data }, { runId, claims: { endUser: 'user-manager' } });
+  log.observe({ seq: 1, at, type: 'decision', callId: 'call-0001', data }, { runId, claims: { endUser: 'user-manager' } });
+  const { record } = await log.record('mock', runId);
+  assert.equal(record.truncated, true, 'the detail was really cut');
+  const rows = record.rows.filter((r) => r.at);
+  assert.deepEqual(rows.map((r) => r.detail.auditSeq), [1, 1, 1, 1, 2, 2, 2, 2], 'rows of the earlier audit entry come first');
+  assert.deepEqual(rows.slice(0, 4).map((r) => r.layer), ['agent', 'person', 'privilege', 'gateway']);
+});
+
+test('the decision log is silent unless someone hands it a writer: tests stay quiet, and the boot path writes to stdout', async (t) => {
+  const written = [];
+  const real = process.stdout.write.bind(process.stdout);
+  process.stdout.write = (chunk, ...rest) => { if (String(chunk).includes('agent-gateway-inspector decision')) { written.push(String(chunk)); return true; } return real(chunk, ...rest); };
+  try {
+    const rt = await createRuntime({ stubBase: await ports(3) });
+    t.after(() => rt.close());
+    await rt.runScenario('benign');
+    assert.deepEqual(written, [], 'a runtime made without a log writes nothing to stdout');
+    stdoutLine('2026-11-22T10:00:00.000Z agent-gateway-inspector decision layer=agent step=x actor=a result=passed cause=- ref=r run=- mode=mock');
+    assert.equal(written.length, 1, 'stdoutLine is the stdout writer');
+  } finally { process.stdout.write = real; }
+  assert.match(fs.readFileSync(new URL('../src/app.js', import.meta.url), 'utf8'), /createRuntime\(\{ log: stdoutLine \}\)/, 'the boot path hands the runtime the stdout writer');
 });

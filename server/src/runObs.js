@@ -14,6 +14,8 @@
 // One run per record. A Mock run is one scenario run. It is open while the scenario is executing and while any call of it still waits
 // (a held call, an approved hold not yet used, an allowed call not yet forwarded); events on its calls join it until then, and an event after
 // that is on stdout only. The mode is stored on the run: a run is returned only in the mode it was made in.
+// Counts in the panel are check rows, not calls: one call makes several checks (registry, end user, policy engine). The gateway row repeats the policy
+// engine's decision as information, so one decision is never counted twice as a refusal or an allow.
 //
 // Stdout line (what a collector would ship), one per row:
 //   `<iso> agent-gateway-inspector decision layer=<layer> step=<step> actor=<who> result=<passed|stopped|unclear|no-reply> cause=<cause> ref=<call or door> run=<id|-> mode=<mock|real>`
@@ -66,13 +68,14 @@ const DENY = {
 const OTHER = ['privilege', 'refused', 'other', (c) => `The gateway turned the call away (reason ${text(c.reason, 40)}).`];
 
 // One stored audit entry -> rows [{ layer, step, outcome, cause, who, ref, message, detail, result? }], in the order the stub computed them.
-// `claims` are the claims the policy read from the credential (only a decision entry has them). An entry that is not a log row of any layer
+// `claims` are the claims the policy read from the credential (only a decision entry has them). `lapsedAt` is when a wait ran out, for an expiry entry (the
+// gateway only notices a lapse when it next looks, so the row's own time, which is the audit's, is later). An entry that is not a log row of any layer
 // (reset) gives none.
-export function rowsOf(entry, claims = null) {
+export function rowsOf(entry, claims = null, lapsedAt = null) {
   const d = entry.data || {};
   const who = d.agentId;
   const ref = entry.callId;
-  const base = { callId: entry.callId, tool: d.tool, auditSeq: entry.seq };
+  const base = { auditSeq: entry.seq, callId: entry.callId, tool: d.tool }; // the audit sequence is what orders rows of one instant; a number is never cut by the collector's size cap
   const row = (layer, step, outcome, cause, message, detail = {}, extra = {}) => ({ layer, step, outcome, cause, who, ref, message, detail: { ...base, ...detail }, ...extra });
   switch (entry.type) {
     case 'decision': {
@@ -100,15 +103,17 @@ export function rowsOf(entry, claims = null) {
       } else if (spec[0] === 'privilege') {
         rows.push(row('privilege', 'policy-verdict', spec[1], spec[2], spec[3](c), verdict));
       }
+      // What the stub gateway does with the call follows from the decision above and is computed by no check of its own, so it is information: counting it
+      // as a second allow or refusal would count one decision twice.
       if (d.decision === 'allow') {
         const upstream = Object.hasOwn(TOOLS, d.tool) ? TOOLS[d.tool].upstream : null;
-        rows.push(row('gateway', 'gateway-verdict', 'allowed', 'let-through', `The stub gateway let the call through to the stub tool server${upstream ? ` "${upstream}"` : ''}.`));
+        rows.push(row('gateway', 'gateway-verdict', 'info', 'let-through', `The stub gateway let the call through to the stub tool server${upstream ? ` "${upstream}"` : ''}. This is the decision above seen at the gateway, not a second check.`));
       } else if (d.decision === 'pause') {
         rows.push(row('gateway', 'gateway-verdict', 'info', 'held', claims?.attended === false
-          ? 'The stub gateway holds the call and answers at once with a hold reference: no connection is kept open, and nothing is forwarded.'
-          : 'The stub gateway holds the call: nothing is forwarded until a human answers.'));
+          ? 'The stub gateway holds the call and answers at once with a hold reference: no connection is kept open, and nothing is forwarded. This is the decision above seen at the gateway.'
+          : 'The stub gateway holds the call: nothing is forwarded until a human answers. This is the decision above seen at the gateway.'));
       } else {
-        rows.push(row('gateway', 'gateway-verdict', spec[1], 'turned-away', 'The stub gateway turned the call away: it was not forwarded to any tool server.'));
+        rows.push(row('gateway', 'gateway-verdict', 'info', 'turned-away', 'The stub gateway turned the call away: it was not forwarded to any tool server. This is the decision above seen at the gateway, not a second refusal.'));
       }
       return rows;
     }
@@ -125,7 +130,10 @@ export function rowsOf(entry, claims = null) {
       return [row('privilege', 'approval-answered', 'refused', 'declined-by-human', 'A human denied the call: it was never forwarded.', d.ref ? { ref: d.ref } : {})];
     case 'pause_expired':
     case 'hold_expired':
-      return [row('privilege', 'approval-lapsed', 'blocked', 'no-use-in-time', 'The wait for a human ran out (no answer, or an approval nobody used in time): the gateway fails closed and the call is not forwarded.', d.ref ? { ref: d.ref } : {})];
+      // The row is stamped when the gateway noticed the lapse (it looks when something next asks), so the row says so and carries the lapse time; the time is never back-dated.
+      return [row('privilege', 'approval-lapsed', 'blocked', 'no-use-in-time',
+        `${lapsedAt ? `The wait for a human ran out at ${lapsedAt}; the gateway noticed it only now (the time of this row)` : 'The wait for a human had run out when the gateway noticed it (after the lapse)'} and failed closed: no answer, or an approval nobody used in time. The call is not forwarded.`,
+        { ...(d.ref ? { ref: d.ref } : {}), ...(lapsedAt ? { lapsedAt } : {}), noticedAt: entry.at })];
     case 'pause_bad_code':
     case 'hold_bad_code':
       return [row('privilege', 'approval-code', 'refused', 'wrong-code', `A wrong approval code was presented (${d.failures} so far): the answer was not accepted.`, { failures: d.failures })];
@@ -164,8 +172,11 @@ function replyOf(kind, r) {
       ? { outcome: 'refused', cause: 'tool-error', message: `The door answered the refusal probe with a tool error (isError): ${text(r.text)}`, detail: { isError: true, ms: r.ms } }
       : { outcome: 'allowed', cause: 'ran-probe', message: 'The door ran the refusal probe, a tool no policy should grant: check the door policy.', detail: { isError: false, ms: r.ms } };
   }
-  const { status, message } = r.refusal;
+  if (!r.refusal || typeof r.refusal !== 'object') return { outcome: 'info', cause: 'unreadable', message: `The lab could not read the door's reply to ${what}: it came back with no status and no words.`, detail: { ms: r.ms } };
+  const { status = null, message = '' } = r.refusal;
   const words = text(message);
+  // The lab's own words for a call that never completed. gatewayReal.js keeps only an error's status and message (it drops the error code), so a gateway's own reply
+  // that began with exactly this text would be read the same way: that cannot be told apart here (README, not verified).
   if (status === null && /^MCP HTTP request (?:timed out|unreachable)/.test(message)) return null;
   if (status === 401 || status === 403) return { outcome: 'refused', cause: `http-${status}`, message: `The door answered ${what} with HTTP ${status}: ${words}`, detail: { status, ms: r.ms } };
   if (typeof status === 'number') return { outcome: 'info', cause: `http-${status}`, message: `The door answered ${what} with HTTP ${status}, which is not a policy answer the lab can read: ${words}`, detail: { status, ms: r.ms } };
@@ -192,22 +203,27 @@ const MOCK_WHY = {
   gateway: 'The stub gateway logged nothing in this run so far.',
   resource: 'No call of this run was forwarded, so no stub tool server was reached.',
 };
+// One line on the lab's stdout: what the boot path (app.js) hands to the run log. A run log made without a writer is silent, so tests stay quiet unless one asserts on the lines.
+export const stdoutLine = (line) => process.stdout.write(`${line}\n`);
 const REAL_WHY = {
   person: 'This lab signs nobody in. The gateway check sends an agent key from the settings file; nothing about a person reaches the lab.',
   agent: 'The lab sends the agent key and gets the door\'s reply (shown under Agent gateway). It reads no gateway log, so it does not claim the gateway logged the key.',
   authorize: 'This lab does not call PingOne Authorize.',
   privilege: 'The lab only sees the door\'s reply: it cannot tell Privilege\'s policy decision from the gateway\'s own, and it reads no Privilege log, so nothing is claimed here.',
-  gateway: 'The door gave no reply to tools/list, so there is no reply to show.',
+  gateway: 'tools/list got no reply (the lab read it as no connection), so there is no reply to show and the refusal probe was not sent. Absence of a reply is not proof of what the gateway would have answered.',
   resource: 'The lab reads no tool server: tools/list is answered by the gateway, and the refusal probe names a tool nothing grants.',
 };
 
 // The run log of ONE runtime. observe(entry, ctx) is called by gateway.js for every audit entry, in order, right after it was stored.
-export function createRunLog({ write = (line) => process.stdout.write(`${line}\n`), clock = Date.now } = {}) {
+export function createRunLog({ write = () => {}, clock = Date.now } = {}) {
   // Run ids are unique across Reset and restarts: a per-log random part and a counter that survives Reset.
   const part = crypto.randomBytes(3).toString('hex');
   let made = 0;
   let runs = { mock: [], real: [] }; // oldest first
-  const stamp = () => new Date(clock()).toISOString();
+  const collector = createRunObservability({ clock }); // no readers, so it holds no state: built once
+  const failed = (what, e) => console.error(`[${SERVICE}] ${what} failed: ${e?.code || e?.name || 'Error'}: ${String(e?.message ?? e).slice(0, 120)}`);
+  // A broken clock must not break a run or an audit: the time of a reply the lab just received falls back to the wall clock, and the failure is logged.
+  const stamp = () => { try { return new Date(clock()).toISOString(); } catch (e) { failed('reading the clock', e); return new Date().toISOString(); } };
   const emitLine = (line) => { try { write(line); } catch (e) { console.error(`[${SERVICE}] run log write failed: ${e?.code || e?.name || 'Error'}`); } };
   const isOpen = (run) => run.executing || run.inflight.size > 0;
   // The id carries no scenario name: scenario names hold words the family's matchers read (scope, refused, expired), and the id is in every stdout line.
@@ -227,8 +243,8 @@ export function createRunLog({ write = (line) => process.stdout.write(`${line}\n
     if (entry.type === 'decision') { if (entry.data.decision === 'deny') run.inflight.delete(entry.callId); else run.inflight.add(entry.callId); } else if (entry.type === 'hold_consumed') { run.inflight.add(entry.data.consumedBy); run.inflight.delete(entry.callId); } else if (ENDS.has(entry.type)) run.inflight.delete(entry.callId);
   };
 
-  function observe(entry, { runId = null, claims = null } = {}) {
-    const rows = rowsOf(entry, claims);
+  function observe(entry, { runId = null, claims = null, lapsedAt = null } = {}) {
+    const rows = rowsOf(entry, claims, lapsedAt);
     if (!rows.length) return;
     const run = runId ? find('mock', runId) : null;
     const joins = Boolean(run) && isOpen(run);
@@ -244,11 +260,7 @@ export function createRunLog({ write = (line) => process.stdout.write(`${line}\n
   }
 
   // A scenario run opens a run; the runtime closes the execution when the scenario's script has finished (calls may still wait for a human).
-  // Neither throws: a failure here must not break the scenario.
-  const failed = (what, e) => console.error(`[${SERVICE}] ${what} failed: ${e?.code || e?.name || 'Error'}: ${String(e?.message ?? e).slice(0, 120)}`);
-  function begin() {
-    try { return newRun('mock', stamp()).id; } catch (e) { failed('starting the run record', e); return null; }
-  }
+  const begin = () => newRun('mock', stamp()).id; // stamp() never throws, and nothing else here can
   function executed(runId) {
     const run = runId ? find('mock', runId) : null;
     if (run) run.executing = false;
@@ -260,7 +272,13 @@ export function createRunLog({ write = (line) => process.stdout.write(`${line}\n
       const { events, noReply } = gatewayCheckEvents({ app, caller, listing, listedAt, probe, probedAt });
       const run = newRun('real', startedAt);
       run.executing = false;
-      run.noReply = noReply.map((e) => `${e.step === 'tools-list-reply' ? 'tools/list' : 'the refusal probe'} got no reply (the call did not complete), so nothing is shown for it`);
+      run.noReply = noReply.map((e) => `${e.step === 'tools-list-reply' ? 'tools/list' : 'The refusal probe'} got no reply: the lab read it as no connection (a gateway reply with this exact wording would be read the same way), so nothing is shown for it`);
+      // A check with only some of its replies must not look complete: the lane says which one is missing (the shared panel shows a lane's reason and its partial flag).
+      const missingProbe = noReply.some((e) => e.step === 'probe-reply');
+      if (events.length && missingProbe) {
+        run.partial = true;
+        run.reason = 'Partial check: the refusal probe got no reply (the lab read it as no connection), so this lane holds the tools/list reply only. Absence of a reply is not proof of what the gateway would have answered.';
+      } else if (listing && !listing.ok && !noReply.length) run.reason = 'The refusal probe was not sent, because tools/list did not succeed.';
       for (const e of [...events, ...noReply].sort((a, b) => Date.parse(a.at) - Date.parse(b.at))) {
         if (e.result !== 'no-reply') run.rows.push({ at: e.at, layer: e.layer, product: e.product, outcome: e.outcome, message: e.message, detail: { cause: e.cause, ...e.detail } });
         emitLine(decisionLine(e, e.at, run.id, 'real'));
@@ -281,12 +299,14 @@ export function createRunLog({ write = (line) => process.stdout.write(`${line}\n
     const open = isOpen(run);
     const noReply = [...run.noReply];
     const mock = source === 'mock';
+    const { partial, reason: gatewayReason } = run;
     const layers = ['person', 'agent', 'authorize', 'privilege', 'gateway', 'resource'].map((layer) => {
       const mine = run.rows.filter((r) => r.layer === layer);
       const why = (mock ? MOCK_WHY : REAL_WHY)[layer];
       return mock ? { layer, products: [], reason: why, simulated: mine } : { layer, products: [], reason: why, responses: mine };
     });
-    const rec = await createRunObservability({ clock }).collectRun({ runId: run.id, startedAt: run.startedAt, endedAt: run.endedAt, source, layers });
+    const rec = await collector.collectRun({ runId: run.id, startedAt: run.startedAt, endedAt: run.endedAt, source, layers });
+    if (gatewayReason) { rec.reasons = { ...rec.reasons, gateway: gatewayReason }; if (partial) rec.partial = { ...rec.partial, gateway: true }; }
     // Rows of one instant (one decision makes several) are put back in the order the stub computed them, not the collector's layer order.
     const stamped = rec.rows.filter((r) => r.at !== null).sort((a, b) => Date.parse(a.at) - Date.parse(b.at) || (a.detail?.auditSeq ?? 0) - (b.detail?.auditSeq ?? 0) || LAYER_ORDER.indexOf(a.layer) - LAYER_ORDER.indexOf(b.layer));
     return { record: { ...rec, truncated: rec.truncated || run.cut, rows: [...stamped.map((r, i) => ({ ...r, id: `r${i + 1}` })), ...rec.rows.filter((r) => r.at === null)] }, open, noReply };
@@ -296,6 +316,7 @@ export function createRunLog({ write = (line) => process.stdout.write(`${line}\n
     observe, begin, executed, recordGatewayCheck, record, stamp,
     // The newest run of a mode, or the one with that id; null when none is kept in that mode.
     head(source, runId) { const run = find(source, runId); return run ? { runId: run.id, cursor: run.cursor, open: isOpen(run) } : null; },
-    reset() { runs = { mock: [], real: [] }; },
+    // Reset is the stub engine's: it forgets the scenario runs. A gateway check is not the stub's, so it is kept.
+    reset() { runs.mock = []; },
   };
 }

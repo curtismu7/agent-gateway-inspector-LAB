@@ -10,6 +10,7 @@ import { allPassed, runChecks as defaultChecks } from './doctor.js';
 import { DEFAULT_DIAGRAMS_DIR, diagramByName, loadDiagrams } from './diagramData.js';
 import { MODES, liveRefusal, modeFrom } from './config.js';
 import { RunObsError } from './runObservability.js';
+import { stdoutLine } from './runObs.js';
 
 // The reason the Mock/Real toggle gives for Real when the gateway settings are absent.
 export const LIVE_REFUSAL = 'Real is not configured: set AGI_GW_URL, AGI_GW_APPS and at least one AGI_GW_KEY_<NAME> in the shared settings file (~/Development/.env, or STANDALONE_ENV). Mock keeps working.';
@@ -135,13 +136,13 @@ export function createApp({ runtime, health, webDist = null, env = process.env, 
     return null;
   };
   // A cheap answer the page polls: it changes when the run gets a row, so the record is only built again then.
-  api.get('/run-observability/head', (req, res) => {
+  api.route('/run-observability/head').get((req, res) => {
     const q = runQuery(req, res);
     if (!q) return undefined;
     const source = realDoor ? 'real' : 'mock';
     return res.json({ source, ...(req.rt.runLog.head(source, q.asked) ?? { runId: null }) });
-  });
-  api.get('/run-observability', wrap(async (req, res) => {
+  }).all(methods('GET'));
+  api.route('/run-observability').get(wrap(async (req, res) => {
     const q = runQuery(req, res);
     if (!q) return undefined;
     const source = realDoor ? 'real' : 'mock';
@@ -152,7 +153,7 @@ export function createApp({ runtime, health, webDist = null, env = process.env, 
     }
     if (!run) return res.json({ source, record: null, message: q.asked === undefined ? NO_RUN[source] : `No run with that id in ${source} mode: it was made in the other mode, never started, or is no longer kept.` });
     return res.json({ source, ...run });
-  }));
+  })).all(methods('GET'));
 
   // The flow diagram, as diagram-studio/1 data, by name. Only the names in the allow-list answer; anything else is a plain 404
   // that does not repeat what was asked for.
@@ -242,7 +243,7 @@ export async function startHttpServer({ port = serverPort(), host = bindHost(), 
   const allowedHosts = parseAllowedHosts(env); // the lab-proxy's names; before any server or timer starts
   assertBindAllowed(host, env);
   loadDiagrams(diagramsDir); // a bad diagram file refuses the start, before anything is opened
-  const rt = runtime || await createRuntime();
+  const rt = runtime || await createRuntime({ log: stdoutLine }); // the boot path writes the decision log (rule 27) to stdout
   const health = createHealth({ demoId: 'agent-gateway-inspector', demoName: 'Agent Gateway Inspector LAB', version: '0.2.0', runChecks: defaultChecks, allPassed, env });
   return new Promise((resolve, reject) => {
     const httpServer = createApp({ runtime: rt, health, webDist, env, diagramsDir, allowedHosts, port }).listen(port, host);

@@ -44,10 +44,11 @@ export function createGateway({ forward, now = () => Date.now(), audit = createA
   const runIds = new Map(); // call id -> the run (scenarios.js) that made the call, so later events on it (a human's answer, the agent's retry) join that run
   // Every audit entry is handed to `observe` (the run record, rule 27) once, as stored: the time on the row is the time the audit stamped.
   // A throwing observer is logged and changes nothing: the call, the audit trail and the reply are the same without it.
-  const emit = (type, callId, data, claims = null) => {
+  // extra: what the observer may use that the audit entry does not carry ({ claims } for a decision, { lapsedAt } for an expiry).
+  const emit = (type, callId, data, extra = {}) => {
     const entry = audit.append(type, callId, data);
     if (observe) {
-      try { observe(entry, { runId: runIds.get(callId) ?? null, claims }); } catch (e) { console.error(`[agent-gateway-inspector] run observer failed: ${e?.code || e?.name || 'Error'}: ${String(e?.message ?? e).slice(0, 120)}`); }
+      try { observe(entry, { runId: runIds.get(callId) ?? null, ...extra }); } catch (e) { console.error(`[agent-gateway-inspector] run observer failed: ${e?.code || e?.name || 'Error'}: ${String(e?.message ?? e).slice(0, 120)}`); }
     }
     return entry;
   };
@@ -65,21 +66,22 @@ export function createGateway({ forward, now = () => Date.now(), audit = createA
         c.pause.state = 'expired';
         secrets.delete(c.id);
         touch(c);
-        emit('pause_expired', c.id, { agentId: c.agentId, tool: c.tool });
+        emit('pause_expired', c.id, { agentId: c.agentId, tool: c.tool }, { lapsedAt: new Date(c.pause.expiresAtMs).toISOString() });
       } else if (c.outcome === 'held' && waiting(c) && c.hold.expiresAtMs <= t) {
         c.outcome = 'expired';
         c.hold.state = 'expired';
         c.hold.expiredAt = new Date(t).toISOString();
         secrets.delete(c.id);
         touch(c);
-        emit('hold_expired', c.id, { agentId: c.agentId, tool: c.tool, ref: c.hold.ref });
+        emit('hold_expired', c.id, { agentId: c.agentId, tool: c.tool, ref: c.hold.ref }, { lapsedAt: new Date(c.hold.expiresAtMs).toISOString() });
       }
     }
   }
 
   function evictIfFull() {
     while (calls.size > ringCap) {
-      const oldest = [...calls.values()].find((c) => !waiting(c));
+      // A call whose forward is still in flight is kept too: evicting it would lose the run it belongs to, and the run would never close.
+      const oldest = [...calls.values()].find((c) => !waiting(c) && c.outcome !== 'forwarding');
       if (!oldest) break;
       calls.delete(oldest.id);
       runIds.delete(oldest.id);
@@ -199,7 +201,7 @@ export function createGateway({ forward, now = () => Date.now(), audit = createA
     presented.set(c, { tokenId: typeof tokenId === 'string' ? safeText(tokenId) : undefined, surface: typeof surface === 'string' ? safeText(surface, 16) : surface === undefined ? undefined : '?' });
     calls.set(id, c);
     touch(c);
-    emit('decision', id, { agentId: c.agentId, tool: c.tool, args: c.args, decision: c.decision, reason: c.reason, ruleId: c.ruleId, requiredScope: c.requiredScope, layers: c.layers, subject: c.claims?.subject ?? null }, c.claims);
+    emit('decision', id, { agentId: c.agentId, tool: c.tool, args: c.args, decision: c.decision, reason: c.reason, ruleId: c.ruleId, requiredScope: c.requiredScope, layers: c.layers, subject: c.claims?.subject ?? null }, { claims: c.claims });
     evictIfFull();
     if (c.decision === 'allow') {
       c.outcome = 'forwarding'; // a state nothing else can act on while the upstream answers

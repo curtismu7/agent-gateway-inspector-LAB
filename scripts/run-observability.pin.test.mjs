@@ -33,3 +33,14 @@ test('compose, the Dockerfile and .env.example never mount the Docker socket and
     assert.ok(!/RUN_OBS_/.test(text), `${f}: no reader settings in the container`);
   }
 });
+
+test('the README says what the panel does not verify or back-date: the no-reply reading, the late expiry, the outcome table and what Reset keeps', () => {
+  const readme = read('README.md');
+  assert.match(readme, /\*\*Not verified:\*\* the shared hop `gatewayReal\.js` keeps only an error's status and message and drops its error code/);
+  assert.match(readme, /would be read the same way, as "read as no connection", never as a pass/);
+  assert.match(readme, /the `blocked` row's time is when it noticed, the same time as its stdout line, and is never back-dated/);
+  assert.match(readme, /A lapsed approval is `refused` when it is presented on a retry .* and `blocked` when the wait itself ran out/);
+  assert.match(readme, /The panel's counts are check rows, not calls/);
+  assert.match(readme, /\*\*Reset\*\* forgets the scenario runs .* keeps Real gateway checks/);
+  assert.match(readme, /any other method is a 405 with `Allow: GET`/);
+});
