@@ -117,7 +117,8 @@ const matches = (view, exp) => Object.entries(exp).every(([k, v]) => view[k] ===
 
 // hold: leave a paused or held call waiting for the UI or an API client to answer; the steps after it (the agent's retries) are not run.
 // sleep: how to wait out a pause (tests inject one that advances their clock).
-export async function runScenario(gateway, id, { hold = false, sleep = (ms) => new Promise((r) => setTimeout(r, ms)) } = {}) {
+// runId: the run record every call of this scenario joins (runtime.js starts it; the gateway tags each call with it).
+export async function runScenario(gateway, id, { hold = false, sleep = (ms) => new Promise((r) => setTimeout(r, ms)), runId } = {}) {
   const sc = getScenario(id);
   if (!sc) return null;
   gateway.clearRate(sc.agent);
@@ -126,7 +127,7 @@ export async function runScenario(gateway, id, { hold = false, sleep = (ms) => n
   let late = null;
   for (const step of sc.calls) {
     const { viaHold, ...input } = step;
-    const v = await gateway.handle({ ...input, approvalRef: viaHold === undefined ? undefined : refs[viaHold], scenarioId: sc.id, pauseTtlMs: sc.pauseTtlMs });
+    const v = await gateway.handle({ ...input, approvalRef: viaHold === undefined ? undefined : refs[viaHold], scenarioId: sc.id, runId, pauseTtlMs: sc.pauseTtlMs });
     ids.push(v.id);
     refs.push(v.hold?.ref);
     if ((v.outcome !== 'pending' && v.outcome !== 'held') || !sc.resolve) continue;

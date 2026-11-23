@@ -9,6 +9,8 @@ import { createHealth } from './health.js';
 import { allPassed, runChecks as defaultChecks } from './doctor.js';
 import { DEFAULT_DIAGRAMS_DIR, diagramByName, loadDiagrams } from './diagramData.js';
 import { MODES, liveRefusal, modeFrom } from './config.js';
+import { RunObsError } from './runObservability.js';
+import { stdoutLine } from './runObs.js';
 
 // The reason the Mock/Real toggle gives for Real when the gateway settings are absent.
 export const LIVE_REFUSAL = 'Real is not configured: set AGI_GW_URL, AGI_GW_APPS and at least one AGI_GW_KEY_<NAME> in the shared settings file (~/Development/.env, or STANDALONE_ENV). Mock keeps working.';
@@ -109,14 +111,49 @@ export function createApp({ runtime, health, webDist = null, env = process.env, 
     const app = String(req.body?.app || realDoor.apps[0]);
     if (!realDoor.apps.includes(app)) return bad(res, `app must be one of ${realDoor.apps.join(', ')}`);
     const caller = req.body?.caller && realDoor.callers.some((c) => c.id === req.body.caller) ? req.body.caller : realDoor.callers[0].id;
+    const log = req.rt.runLog; // rule 27: each reply the lab received is stamped once and recorded as one Real run
+    const startedAt = log.stamp();
     const listing = await realDoor.list(app, caller);
+    const listedAt = log.stamp();
     const out = { app, caller, gateway: realDoor.origin, ...(realDoor.version ? { version: realDoor.version } : {}), listing };
+    let probedAt;
     if (listing.ok) {
       // The refusal probe: a tool name nothing grants. The gateway's refusal layer is the evidence.
       out.refusal = await realDoor.call(app, caller, 'gateway_inspector_refusal_probe_tool', {});
+      probedAt = log.stamp();
     }
+    log.recordGatewayCheck({ app, caller, startedAt, listing, listedAt, probe: out.refusal, probedAt });
     res.json(out);
   }));
+
+  // Rule 27: the record of ONE run, in the CURRENT mode only (a run made in the other mode is never returned): the run named by ?runId, else the
+  // newest. Mock runs are scenario runs; Real runs are gateway checks (scenarios run through the stub in every mode, so they are never Real).
+  const NO_RUN = { mock: 'No run yet: pick a scenario and press Run.', real: 'No gateway check yet in Real mode. Scenarios always run through the in-process stub, so their record is shown in Mock mode.' };
+  const runQuery = (req, res) => {
+    const asked = req.query.runId;
+    if (asked === undefined || (typeof asked === 'string' && /^[A-Za-z0-9._-]{1,64}$/.test(asked))) return { asked };
+    bad(res, 'runId must be 1 to 64 characters from A-Z a-z 0-9 . _ -');
+    return null;
+  };
+  // A cheap answer the page polls: it changes when the run gets a row, so the record is only built again then.
+  api.route('/run-observability/head').get((req, res) => {
+    const q = runQuery(req, res);
+    if (!q) return undefined;
+    const source = realDoor ? 'real' : 'mock';
+    return res.json({ source, ...(req.rt.runLog.head(source, q.asked) ?? { runId: null }) });
+  }).all(methods('GET'));
+  api.route('/run-observability').get(wrap(async (req, res) => {
+    const q = runQuery(req, res);
+    if (!q) return undefined;
+    const source = realDoor ? 'real' : 'mock';
+    let run;
+    try { run = await req.rt.runLog.record(source, q.asked); } catch (e) {
+      if (e instanceof RunObsError) return res.status(e.status).json({ error: e.code, message: e.message });
+      throw e;
+    }
+    if (!run) return res.json({ source, record: null, message: q.asked === undefined ? NO_RUN[source] : `No run with that id in ${source} mode: it was made in the other mode, never started, or is no longer kept.` });
+    return res.json({ source, ...run });
+  })).all(methods('GET'));
 
   // The flow diagram, as diagram-studio/1 data, by name. Only the names in the allow-list answer; anything else is a plain 404
   // that does not repeat what was asked for.
@@ -206,7 +243,7 @@ export async function startHttpServer({ port = serverPort(), host = bindHost(), 
   const allowedHosts = parseAllowedHosts(env); // the lab-proxy's names; before any server or timer starts
   assertBindAllowed(host, env);
   loadDiagrams(diagramsDir); // a bad diagram file refuses the start, before anything is opened
-  const rt = runtime || await createRuntime();
+  const rt = runtime || await createRuntime({ log: stdoutLine }); // the boot path writes the decision log (rule 27) to stdout
   const health = createHealth({ demoId: 'agent-gateway-inspector', demoName: 'Agent Gateway Inspector LAB', version: '0.2.0', runChecks: defaultChecks, allPassed, env });
   return new Promise((resolve, reject) => {
     const httpServer = createApp({ runtime: rt, health, webDist, env, diagramsDir, allowedHosts, port }).listen(port, host);

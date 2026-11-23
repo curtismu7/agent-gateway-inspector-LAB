@@ -13,6 +13,7 @@ import Flow from "./components/Flow.jsx";
 import Story from "./components/Story.jsx";
 import GatewayTrace from "./gateway-trace/GatewayTrace.jsx";
 import PrivilegeCheck from "./privilege-check/PrivilegeCheck.jsx";
+import RunObs from "./components/RunObs.jsx";
 
 const safe = (fn, fallback) => { try { return fn(); } catch { return fallback; } };
 const initialTheme = () => {
@@ -87,6 +88,7 @@ export default function App() {
   const [detailError, setDetailError] = useState("");
   const [lastRun, setLastRun] = useState(null);
   const [traces, setTraces] = useState(() => new Map());
+  const [obs, setObs] = useState({ runId: null, attempt: null }); // the run this page started for the run record (rule 27), or why an attempt began none
   const [storyNow, setStoryNow] = useState(-1);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -155,12 +157,16 @@ export default function App() {
     try {
       const r = await runScenario(scenarioId, holdIt);
       setLastRun(r); setVerify(null); setTraces(noteTraces(new Map(), r.calls));
+      setObs({ runId: r.runId ?? null, attempt: r.runId ? null : "The scenario ran, but its run record could not be started (see the server log)." });
       setMessage(summarize(r));
       const snap = await refresh();
       const first = r.calls.find((c) => c.outcome === "pending" || c.outcome === "held") || r.calls[0];
       if (first) select(first.id);
       return { ...r, auditSize: snap?.auditSize ?? 0 };
-    } catch (e) { setMessage(""); setError(e.status === 429 ? "A scenario is already running. Try again in a moment." : `Run failed: ${e.message}`); return null; } finally { setBusy(false); }
+    } catch (e) {
+      const why = e.status === 429 ? "A scenario is already running. Try again in a moment." : `Run failed: ${e.message}`;
+      setMessage(""); setError(why); setObs({ runId: null, attempt: why }); return null;
+    } finally { setBusy(false); }
   }, [scenarioId, refresh]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const answer = async (decision) => {
@@ -207,7 +213,7 @@ export default function App() {
     try {
       await postReset();
       setResetSignal((n) => n + 1); // the diagram boxes go back to where they started
-      setLastRun(null); setTraces(new Map()); setVerify(null); setSelectedId(null); setDetail(null); setCalls([]);
+      setLastRun(null); setTraces(new Map()); setObs({ runId: null, attempt: null }); setVerify(null); setSelectedId(null); setDetail(null); setCalls([]);
       await refresh();
       setMessage("Reset: calls cleared and a new audit epoch started. The old trail is discarded and the new one records that.");
     } catch (e) { setError(`Reset failed: ${e.message}`); } finally { setBusy(false); }
@@ -294,6 +300,7 @@ export default function App() {
         {error && <p className="alert" role="alert">{error}</p>}
         {pollError && <p className="alert" role="alert">{pollError}</p>}
         <TracePanel traces={traces} source={source} />
+        <div className="card" data-testid="run-obs"><RunObs runId={obs.runId} attempt={obs.attempt} /></div>
 
         {view === "inspector" ? (
           <>
