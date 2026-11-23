@@ -24,6 +24,13 @@ test('this lab reads no logs: no readers file, and nothing in the server names a
   const files = fs.readdirSync(path.join(root, 'server/src')).filter((f) => f.endsWith('.js') && f !== 'runObservability.js');
   assert.ok(files.includes('runObs.js'));
   for (const f of files) assert.ok(!/ElasticsearchReader|DockerLogReader|readersFromEnv|RUN_OBS_|docker\.sock/.test(read(`server/src/${f}`)), `${f} names no reader, no RUN_OBS_ setting and no Docker socket`);
+  // The page code outside the vendored folder carries no RUN_OBS_ name either (a JS constant with that prefix reads like a setting).
+  const walk = (dir) => fs.readdirSync(path.join(root, dir), { withFileTypes: true }).flatMap((e) => {
+    const rel = `${dir}/${e.name}`;
+    if (e.isDirectory()) return rel === 'web/src/run-observability' ? [] : walk(rel);
+    return /\.(jsx?|mjs)$/.test(e.name) ? [rel] : [];
+  });
+  for (const f of walk('web/src')) assert.ok(!/RUN_OBS_/.test(read(f)), `${f} carries no RUN_OBS_ name`);
 });
 
 test('compose, the Dockerfile and .env.example never mount the Docker socket and pass no run-observability settings (nothing reads them)', () => {

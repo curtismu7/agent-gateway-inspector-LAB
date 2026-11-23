@@ -9,7 +9,7 @@ import RunObservability from "../run-observability/RunObservability";
 import { getRunHead, getRunObservability } from "../lib/api.js";
 
 // Where this lab's own log line lives and where it can stream (the README says the same).
-export const RUN_OBS_STREAMS = [
+export const LOG_STREAMS = [
   { product: "Agent Gateway Inspector server (this lab)", lives: "the lab container's stdout: one line per row the stub gateway decides (layer, step, actor, result, cause, call, run, mode; never a credential), stamped when the stub decided", streams: "nowhere today: the family log collector's source list does not include this lab's container. If it did, the SIEM time would be Docker's wall-clock time per line; the time the stub decided stays inside the line" },
   { product: "Privilege, PingOne Authorize", lives: "not run by this lab in Mock: the gateway, the policy engine and the tool servers are stubs in one process. In Real the lab reads only the replies of one gateway check, never a Privilege log or its SIEM index", streams: "nothing to stream from this lab" },
 ];
@@ -78,11 +78,11 @@ export default function RunObs({ runId, attempt, pollMs = POLL_MS }) {
   }, [alerting, pollMs]);
 
   if (attempt) return <Note testId="ro-no-run">That attempt began no run, so there is nothing to show for it: {attempt.slice(0, 300).replace(/[.\s]*$/, ".")} The record of an earlier run is not shown here.</Note>;
-  if (head?.error && head.asked === asked) return <RunObservability record={{ error: head.error, message: head.message }} source={source} streams={RUN_OBS_STREAMS} />;
+  if (head?.error && head.asked === asked) return <RunObservability record={{ error: head.error, message: head.message }} source={source} streams={LOG_STREAMS} />;
   if (!head || head.error || head.asked !== asked || !answer || answer.runKey !== runKey) return <Note testId="ro-loading" role="status">Collecting this run's logs…</Note>;
   return (
     <>
-      <RunObservability record={answer.record} source={answer.source} streams={RUN_OBS_STREAMS} />
+      <RunObservability record={answer.record} source={answer.source} streams={LOG_STREAMS} />
       {answer.record === null && answer.message && <p className="ro-muted" data-testid="ro-none">{answer.message}</p>}
       {answer.open && <p className="ro-muted" data-testid="ro-open">A call of this run is still waiting for a human: its answer joins this record when it comes.</p>}
       {answer.record?.partial?.gateway && <p className="ro-muted" data-testid="ro-partial"><strong>Partial check.</strong> The Agent gateway lane above holds only some of this check's replies; what is missing is named below and in the lane.</p>}
