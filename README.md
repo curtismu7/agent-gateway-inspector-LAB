@@ -118,7 +118,7 @@ The container publishes on `127.0.0.1` only (a test pins it), runs as the non-ro
 npm test      # server (node:test), web (vitest) and the script tests (node --test scripts/*.test.mjs)
 ```
 
-On Node 26, with the counts from the last run in this repo: 212 server tests (node:test), 87 web tests (vitest) and 52 script tests (node:test), 351 in all, all passing.
+On Node 26, with the counts from the last run in this repo: 231 server tests (node:test), 169 web tests (vitest) and 55 script tests (node:test), 455 in all.
 
 ## Troubleshooting
 
@@ -177,9 +177,20 @@ Open `http://127.0.0.1:5850/` after `npm run build` and `npm start`. Call list o
 
 The server serves `web/dist` itself with a same-origin CSP (`default-src 'self'`, no inline script, no `unsafe-eval`); the Host and CSRF guards apply to it too. The UI makes only same-origin requests with no credentials. The web CSS is the vendored shared stylesheet `web/src/styles/standalone-ui.css` (byte-for-byte from the AI-DEMO-Standalone parent) plus `web/src/app.css`, which uses tokens only.
 
+## What each layer logged for this run (rule 27)
+
+Under the Run result the page shows the family's shared run-observability panel (vendored and pinned in `web/src/run-observability/`, `server/src/runObservability.js`): one run, in time order, across the six layers, each row with its time and an origin tag. This lab reads no product log, so a row is `simulated` (Mock) or `response` (Real), never `logged`, and a layer with nothing to show says `not logged` and why.
+
+- **Mock: one run is one scenario run.** Each decision the stub gateway makes is an audit entry, stamped once by the audit; the same entry is the row and the stdout line (the same time on both). Rows are never rebuilt by running the scenario again. **Agent** is the stub agent registry. **Person** is the end-user layer of the four scope layers: the end user is a name in the stub issuer's table, and nobody signs in. **Privilege** is this lab's own policy engine, a stand-in for Privilege (`policy.js`: the other scope layers, the rate limit, the rules, and the approvals). **Agent gateway** is the stub gateway's verdict on the call (let through, held, turned away). **Resource server** is the stub tool server's answer, only for a call that was really forwarded. **Authorize** is not logged: this lab never calls PingOne Authorize. A hold is `information`, never a pass; a rate limit, a full queue, a lapsed wait and the fail-closed guard are `blocked`; an ordinary refusal is `refused`. A held call keeps its run open: the human's answer and the agent's retry join the run that made the call, until the approval is used; an event after that is on stdout only.
+- **Real: one gateway check is one run.** `POST /api/gateway-check` (tools/list, then a refusal probe through a real Privilege gateway with an agent key) is the only Real call. Each reply the lab received is one `response` row under Agent gateway, stamped when the lab had it: a 401 or 403, or a 200 carrying a JSON-RPC error or `isError`, is `refused`; a server error, any other status or an unreadable body is `information`; a call that did not complete is no reply and no row (the page says so). Person, Agent, Privilege and Resource server say they are not logged: the lab reads no gateway log, so it does not claim who decided inside the gateway. Scenarios still run through the in-process stub in every mode, so they are Mock runs and never appear in a Real answer. A run is returned only in the mode it was made in.
+- **Where the run leaves logs.** One line per row on the lab's stdout: `<time> agent-gateway-inspector decision layer=<layer> step=<step> actor=<who> result=<passed|stopped|unclear|no-reply> cause=<cause> ref=<call or app> run=<id|-> mode=<mock|real>`; no credential, no approval code, and none of the words the family's log matchers read. **Time is when the lab recorded it** (the stub decided, or the lab had the reply), not a product's own time.
+- **Where they can stream.** The container's stdout; the family log collector (`shared/ping-log-collector`) does not list this lab's container today, so nothing ships them. If it did, they would reach `demo-logs-<service>` and a SIEM with Docker's wall-clock time as `@timestamp`. Privilege's own logs (the gateway's `cyonproxy.log`, the SIEM index `ping-siem-events-v2`) are not read here.
+- **Not logged today.** PingOne Authorize has no container log, and this lab does not call it. PingFederate's `audit.log` is not shipped. A gateway's refusal or block line shape is not confirmed. The PingOne audit reader does not exist. No `RUN_OBS_*` setting exists in this lab, and it mounts no Docker socket.
+- **Routes.** `GET /api/run-observability[?runId=<id>]` is the record of one run in the current mode (the named run, else the newest; `{ "record": null, "message": ... }` when there is none; a bad id is a 400). `GET /api/run-observability/head[?runId=<id>]` is the cheap answer the page polls: it changes only when the run gets a row, and the record is read again then.
+
 ## API
 
-`GET /api/health`, `GET /api/info`, `GET /api/diagrams/:name`, `GET /api/scenarios`, `POST /api/scenarios/:id/run`, `GET /api/calls`, `GET /api/calls/:id`, `POST /api/calls/:id/decision`, `POST /api/calls/:id/retry`, `GET /api/audit`, `GET /api/audit/verify`, `POST /api/reset`. The table is in [docs/architecture.md](docs/architecture.md). `GET /api/calls?since=<cursor>` is the polling-friendly feed: it returns what changed since the cursor and a new cursor.
+`GET /api/health`, `GET /api/info`, `GET /api/run-observability`, `GET /api/run-observability/head`, `GET /api/diagrams/:name`, `GET /api/scenarios`, `POST /api/scenarios/:id/run`, `GET /api/calls`, `GET /api/calls/:id`, `POST /api/calls/:id/decision`, `POST /api/calls/:id/retry`, `GET /api/audit`, `GET /api/audit/verify`, `POST /api/reset`. The table is in [docs/architecture.md](docs/architecture.md). `GET /api/calls?since=<cursor>` is the polling-friendly feed: it returns what changed since the cursor and a new cursor.
 
 ## Safety in one paragraph
 

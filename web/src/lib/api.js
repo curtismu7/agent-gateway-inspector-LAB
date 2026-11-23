@@ -30,3 +30,7 @@ export const retryCall = (id) => call(`/api/calls/${encodeURIComponent(id)}/retr
 export const getAudit = () => call("/api/audit?limit=500");
 export const verifyAudit = () => call("/api/audit/verify");
 export const postReset = () => call("/api/reset", "POST");
+// Rule 27: the record of one run in the server's current mode (the run named by runId, else the newest), and the cheap answer that says when it changes.
+const runQuery = (runId) => (runId ? `?runId=${encodeURIComponent(runId)}` : "");
+export const getRunObservability = (runId) => call(`/api/run-observability${runQuery(runId)}`);
+export const getRunHead = (runId) => call(`/api/run-observability/head${runQuery(runId)}`);

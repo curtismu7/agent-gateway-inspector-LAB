@@ -31,7 +31,7 @@ const verdictOk = (v) => Boolean(v) && typeof v === 'object' && DECISIONS.includ
 const notReached = () => Object.fromEntries(LAYERS.map((l) => [l, 'skipped']));
 const failClosed = () => ({ decision: 'deny', reason: 'evaluation_error', ruleId: null, layers: notReached(), claims: null });
 
-export function createGateway({ forward, now = () => Date.now(), audit = createAudit({ now: () => new Date(now()) }), ringCap = RING_CAP, pendingCap = PENDING_CAP, rate = RATE_LIMIT, ttlMs = PAUSE_TTL_MS, grantTtlMs = GRANT_TTL_MS, evaluateFn = evaluate } = {}) {
+export function createGateway({ forward, now = () => Date.now(), audit = createAudit({ now: () => new Date(now()) }), ringCap = RING_CAP, pendingCap = PENDING_CAP, rate = RATE_LIMIT, ttlMs = PAUSE_TTL_MS, grantTtlMs = GRANT_TTL_MS, evaluateFn = evaluate, observe = null } = {}) {
   let calls = new Map(); // id -> record (insertion order = age)
   let seq = 0;
   let rev = 0;
@@ -41,6 +41,16 @@ export function createGateway({ forward, now = () => Date.now(), audit = createA
   const holdRefs = new Map(); // hold reference -> call id
   const retryInputs = new Map(); // call id -> what the simulated agent sends again to retry a held call
   const presented = new WeakMap(); // call record -> the token id and surface the simulated agent presented (shown in the trace, never in the API view)
+  const runIds = new Map(); // call id -> the run (scenarios.js) that made the call, so later events on it (a human's answer, the agent's retry) join that run
+  // Every audit entry is handed to `observe` (the run record, rule 27) once, as stored: the time on the row is the time the audit stamped.
+  // A throwing observer is logged and changes nothing: the call, the audit trail and the reply are the same without it.
+  const emit = (type, callId, data, claims = null) => {
+    const entry = audit.append(type, callId, data);
+    if (observe) {
+      try { observe(entry, { runId: runIds.get(callId) ?? null, claims }); } catch (e) { console.error(`[agent-gateway-inspector] run observer failed: ${e?.code || e?.name || 'Error'}: ${String(e?.message ?? e).slice(0, 120)}`); }
+    }
+    return entry;
+  };
 
   const touch = (c) => { c.rev = ++rev; };
   // Waiting for a human: an attended call pending, or an unattended hold that is not yet decided or not yet used.
@@ -55,14 +65,14 @@ export function createGateway({ forward, now = () => Date.now(), audit = createA
         c.pause.state = 'expired';
         secrets.delete(c.id);
         touch(c);
-        audit.append('pause_expired', c.id, { agentId: c.agentId, tool: c.tool });
+        emit('pause_expired', c.id, { agentId: c.agentId, tool: c.tool });
       } else if (c.outcome === 'held' && waiting(c) && c.hold.expiresAtMs <= t) {
         c.outcome = 'expired';
         c.hold.state = 'expired';
         c.hold.expiredAt = new Date(t).toISOString();
         secrets.delete(c.id);
         touch(c);
-        audit.append('hold_expired', c.id, { agentId: c.agentId, tool: c.tool, ref: c.hold.ref });
+        emit('hold_expired', c.id, { agentId: c.agentId, tool: c.tool, ref: c.hold.ref });
       }
     }
   }
@@ -72,6 +82,7 @@ export function createGateway({ forward, now = () => Date.now(), audit = createA
       const oldest = [...calls.values()].find((c) => !waiting(c));
       if (!oldest) break;
       calls.delete(oldest.id);
+      runIds.delete(oldest.id);
       if (oldest.hold) holdRefs.delete(oldest.hold.ref);
       retryInputs.delete(oldest.id);
     }
@@ -116,11 +127,11 @@ export function createGateway({ forward, now = () => Date.now(), audit = createA
       const json = JSON.stringify(result);
       c.upstream = { ok: true, port, result: json.length > RESULT_JSON_CAP ? { truncated: true } : result };
       c.outcome = 'forwarded';
-      audit.append('forwarded', c.id, { agentId: c.agentId, tool: c.tool, upstream: spec.upstream });
+      emit('forwarded', c.id, { agentId: c.agentId, tool: c.tool, upstream: spec.upstream });
     } else {
       c.upstream = { ok: false, port, error: safeText(r.error, 40) };
       c.outcome = 'upstream_error';
-      audit.append('upstream_error', c.id, { agentId: c.agentId, tool: c.tool, error: c.upstream.error });
+      emit('upstream_error', c.id, { agentId: c.agentId, tool: c.tool, error: c.upstream.error });
     }
     touch(c);
   }
@@ -145,7 +156,8 @@ export function createGateway({ forward, now = () => Date.now(), audit = createA
 
   // A simulated agent calls a tool. `scenarioId` and `pauseTtlMs` come from scenarios.js, never from the API.
   // `tokenId`, `surface` and `approvalRef` are what the simulated agent presents; none of them is a claim or a credential.
-  async function handle({ agentId, tool, args, tokenId, surface, approvalRef, scenarioId = null, pauseTtlMs } = {}) {
+  // `runId` (like `scenarioId`) comes from the runtime, never from the API.
+  async function handle({ agentId, tool, args, tokenId, surface, approvalRef, scenarioId = null, runId = null, pauseTtlMs } = {}) {
     sweep();
     const idOk = typeof agentId === 'string' && typeof tool === 'string';
     const argsOk = args && typeof args === 'object' && !Array.isArray(args) && (() => { try { return JSON.stringify(args).length <= MAX_ARGS_JSON; } catch { return false; } })();
@@ -167,6 +179,7 @@ export function createGateway({ forward, now = () => Date.now(), audit = createA
       if (r.hc) { redeemed = r.hc; verdict = { ...verdict, decision: 'allow', reason: 'hold_approved' }; } else verdict = { ...verdict, decision: 'deny', reason: r.reason };
     }
     const id = `call-${String(++seq).padStart(4, '0')}`;
+    if (runId) runIds.set(id, runId);
     const c = {
       id, seq, rev: 0, at: new Date(now()).toISOString(), scenarioId: scenarioId ? safeText(scenarioId) : null,
       agentId: safeText(agentId), tool: safeText(tool), args: argsOk ? clean(rawArgs) : null,
@@ -179,14 +192,14 @@ export function createGateway({ forward, now = () => Date.now(), audit = createA
       redeemed.hold.state = 'consumed'; redeemed.hold.consumedAt = c.at; redeemed.hold.consumedByCallId = id;
       c.approvalRef = redeemed.hold.ref;
       touch(redeemed);
-      audit.append('hold_consumed', redeemed.id, { agentId: c.agentId, tool: c.tool, ref: redeemed.hold.ref, consumedBy: id });
+      emit('hold_consumed', redeemed.id, { agentId: c.agentId, tool: c.tool, ref: redeemed.hold.ref, consumedBy: id });
     } else if (approvalRef !== undefined && verdict.reason.startsWith('approval_')) c.approvalRef = typeof approvalRef === 'string' && HOLD_REF_RE.test(approvalRef) ? approvalRef : null;
     let pauseWanted = verdict.decision === 'pause';
     if (pauseWanted && pendingCount() >= pendingCap) { c.decision = 'deny'; c.reason = 'pause_queue_full'; c.ruleId = null; pauseWanted = false; }
     presented.set(c, { tokenId: typeof tokenId === 'string' ? safeText(tokenId) : undefined, surface: typeof surface === 'string' ? safeText(surface, 16) : surface === undefined ? undefined : '?' });
     calls.set(id, c);
     touch(c);
-    audit.append('decision', id, { agentId: c.agentId, tool: c.tool, args: c.args, decision: c.decision, reason: c.reason, ruleId: c.ruleId, requiredScope: c.requiredScope, layers: c.layers, subject: c.claims?.subject ?? null });
+    emit('decision', id, { agentId: c.agentId, tool: c.tool, args: c.args, decision: c.decision, reason: c.reason, ruleId: c.ruleId, requiredScope: c.requiredScope, layers: c.layers, subject: c.claims?.subject ?? null }, c.claims);
     evictIfFull();
     if (c.decision === 'allow') {
       c.outcome = 'forwarding'; // a state nothing else can act on while the upstream answers
@@ -201,12 +214,12 @@ export function createGateway({ forward, now = () => Date.now(), audit = createA
         secrets.set(id, { code, failures: 0 });
         holdRefs.set(ref, id);
         retryInputs.set(id, { agentId, tool, args: rawArgs, tokenId: verdict.claims.subject, surface: verdict.claims.surface });
-        audit.append('hold_opened', id, { agentId: c.agentId, tool: c.tool, ref, argsHash: hash, expiresAt: new Date(c.hold.expiresAtMs).toISOString() });
+        emit('hold_opened', id, { agentId: c.agentId, tool: c.tool, ref, argsHash: hash, expiresAt: new Date(c.hold.expiresAtMs).toISOString() });
       } else {
         c.outcome = 'pending';
         c.pause = { attended: true, argsHash: hash, state: 'pending', ttlMs: ttl, expiresAtMs: now() + ttl };
         secrets.set(id, { code, failures: 0, args: rawArgs });
-        audit.append('pause_opened', id, { agentId: c.agentId, tool: c.tool, expiresAt: new Date(c.pause.expiresAtMs).toISOString() });
+        emit('pause_opened', id, { agentId: c.agentId, tool: c.tool, expiresAt: new Date(c.pause.expiresAtMs).toISOString() });
       }
       touch(c);
     } else {
@@ -229,12 +242,12 @@ export function createGateway({ forward, now = () => Date.now(), audit = createA
     const want = Buffer.from(crypto.createHash('sha256').update(s.code).digest('hex'));
     if (typeof approvalCode !== 'string' || !crypto.timingSafeEqual(given, want)) {
       s.failures += 1;
-      audit.append(`${kind}_bad_code`, id, { agentId: c.agentId, tool: c.tool, failures: s.failures });
+      emit(`${kind}_bad_code`, id, { agentId: c.agentId, tool: c.tool, failures: s.failures });
       if (s.failures >= MAX_BAD_CODES) {
         c.outcome = 'blocked'; c.reason = 'too_many_bad_codes'; w.state = 'locked';
         secrets.delete(id);
         touch(c);
-        audit.append(`${kind}_locked`, id, { agentId: c.agentId, tool: c.tool });
+        emit(`${kind}_locked`, id, { agentId: c.agentId, tool: c.tool });
       }
       return { status: 403, error: 'bad_approval_code' };
     }
@@ -244,7 +257,7 @@ export function createGateway({ forward, now = () => Date.now(), audit = createA
       c.outcome = 'denied_by_human'; w.state = 'denied';
       if (c.hold) { c.hold.deniedBy = 'human'; c.hold.decidedAt = new Date(now()).toISOString(); }
       touch(c);
-      audit.append(`${kind}_denied`, id, { agentId: c.agentId, tool: c.tool });
+      emit(`${kind}_denied`, id, { agentId: c.agentId, tool: c.tool });
       return { status: 200, call: view(c, false, true) };
     }
     if (c.hold) {
@@ -252,11 +265,11 @@ export function createGateway({ forward, now = () => Date.now(), audit = createA
       c.hold.state = 'approved'; c.hold.decidedAt = new Date(now()).toISOString();
       c.hold.expiresAtMs = now() + grantTtlMs; c.hold.grantTtlSec = grantTtlMs / 1000;
       touch(c);
-      audit.append('hold_approved', id, { agentId: c.agentId, tool: c.tool, ref: c.hold.ref, expiresAt: new Date(c.hold.expiresAtMs).toISOString() });
+      emit('hold_approved', id, { agentId: c.agentId, tool: c.tool, ref: c.hold.ref, expiresAt: new Date(c.hold.expiresAtMs).toISOString() });
       return { status: 200, call: view(c, false, true) };
     }
     c.outcome = 'forwarding'; c.pause.state = 'approved';
-    audit.append('pause_approved', id, { agentId: c.agentId, tool: c.tool });
+    emit('pause_approved', id, { agentId: c.agentId, tool: c.tool });
     await forwardCall(c, rawArgs);
     return { status: 200, call: view(c, false, true) };
   }
@@ -269,7 +282,7 @@ export function createGateway({ forward, now = () => Date.now(), audit = createA
     if (!c) return { status: 404, error: 'not_found' };
     const input = retryInputs.get(id);
     if (!c.hold || !input) return { status: 409, error: 'not_held' };
-    const again = await handle({ ...input, approvalRef: c.hold.ref, scenarioId: c.scenarioId });
+    const again = await handle({ ...input, approvalRef: c.hold.ref, scenarioId: c.scenarioId, runId: runIds.get(id) });
     const rec = calls.get(again.id);
     return { status: 200, call: rec ? view(rec, false, true) : again };
   }
@@ -283,7 +296,7 @@ export function createGateway({ forward, now = () => Date.now(), audit = createA
       return { epoch, cursor: rev, calls: items };
     },
     clearRate(agentId) { rates.delete(agentId); },
-    reset() { calls = new Map(); secrets.clear(); holdRefs.clear(); retryInputs.clear(); rates.clear(); epoch += 1; audit.reset(); },
+    reset() { calls = new Map(); secrets.clear(); holdRefs.clear(); retryInputs.clear(); runIds.clear(); rates.clear(); epoch += 1; audit.reset(); },
     stats() { return { calls: calls.size, pending: pendingCount(), epoch, cursor: rev }; },
   };
 }

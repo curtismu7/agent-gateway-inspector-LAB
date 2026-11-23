@@ -40,6 +40,7 @@ Nothing real is involved. The gateway is a stub that runs inside the server proc
 | `upstreams.js` | The three stub upstream servers and `forwardTo()`, the gateway's only way out. |
 | `scenarios.js` | The twelve scripted agent scenarios and their expected decisions. |
 | `runtime.js` | Wires upstreams, gateway and a scenario queue together. Always mock. |
+| `runObs.js`, `runObservability.js` | Rule 27. `runObs.js` is the lab's side of the run record: it turns each audit entry the gateway hands over (`observe`) into rows and one stdout line, keeps one run per scenario run (or per gateway check in Real), and builds the record. `runObservability.js` is the shared collector, vendored byte for byte and pinned, never edited here. |
 | `config.js`, `settings.js` | The Mock/Live mode and its guards (Live is refused), and the shared settings file reader (`~/Development/.env`, `STANDALONE_ENV`), which takes only `GATEWAY_INSPECTOR_MODE`. |
 | `diagramData.js`, `diagramStudioValidate.js` | Loads and checks the two diagram-studio/1 files in `server/diagrams/` when the server starts (a bad file refuses the start) and looks one up by name from an allow-list. The validator is a copy of the diagram-studio one, unchanged. |
 | `app.js`, `index.js` | The Express app and the boot script. |
