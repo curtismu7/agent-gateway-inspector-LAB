@@ -47,7 +47,16 @@ try {
   await page.goto(`${base}/`);
   await page.getByTestId('mode-badge').waitFor();
   check((await page.getByTestId('mode-badge').innerText()).includes('Mode: Mock'), 'header shows Mode: Mock');
-  check((await page.getByTestId('release-banner').innerText()).startsWith('Mock mode.'), 'the banner says Mock mode');
+  // The page opens on the Real-or-mock modal: it says MOCK and that the release claim is UNVERIFIED; close it before clicking through the page.
+  const modal = page.getByTestId('mode-modal');
+  await modal.waitFor();
+  check((await modal.getAttribute('data-mode')) === 'mock' && /MOCK/.test(await modal.innerText()) && /UNVERIFIED on our tenant/.test(await modal.innerText()), 'the modal says MOCK and that the release claim is UNVERIFIED on our tenant');
+  check((await page.locator('[data-testid="release-banner"]').count()) === 0, 'there is no release banner');
+  await page.getByTestId('mode-modal-ok').click();
+  check((await modal.count()) === 0, 'Got it closes the modal');
+  await page.reload();
+  await page.getByTestId('mode-badge').waitFor();
+  check((await modal.count()) === 0, 'the modal does not come back after a reload in the same session');
   check((await page.getByText('No calls yet').count()) === 1, 'call list starts empty');
   const csp = (await (await fetch(`${base}/`)).headers.get('content-security-policy')) || '';
   check(/script-src 'self'/.test(csp) && !/unsafe-eval/.test(csp), 'the page is served with a same-origin CSP');
@@ -124,15 +133,15 @@ try {
   await page.getByTestId('detail').locator('[data-outcome="denied_by_human"]').waitFor();
   check(true, 'a held pause can be denied from the UI');
 
-  // Ping release claim (2026-11-02), UNVERIFIED on our tenant: the banner, the four scope checks, an unattended hold,
+  // Ping release claim (2026-11-02), UNVERIFIED on our tenant: the four scope checks, an unattended hold,
   // the approval bound to the exact call, one retry, and the refused replay.
-  check(await page.getByTestId('release-banner').isVisible() && /UNVERIFIED on our tenant/.test(await page.getByTestId('release-banner').innerText()), 'the release claim banner is visible on the Inspector tab');
   await page.locator('#scenario-select').selectOption('end-user-denied');
   await page.getByRole('button', { name: 'Run', exact: true }).click();
   await runDone(/^Ran "Scope layer 4/);
   const strip = page.getByTestId('scope-strip');
   await strip.waitFor();
   check((await strip.locator('[data-state="pass"]').count()) === 3 && (await strip.locator('[data-state="fail"]').count()) === 1, 'the four scope checks show three passed and the end-user layer refused');
+  check(/UNVERIFIED on our tenant/.test(await strip.innerText()), 'the scope checks carry the release-claim UNVERIFIED tag');
   check(/Refused/.test(await strip.innerText()) && /scope_end_user/.test(await page.getByTestId('detail').innerText()), 'the refusal is in words, with its reason');
   await page.locator('#scenario-select').selectOption('hold-unattended');
   await page.getByRole('button', { name: 'Run', exact: true }).click();
@@ -175,7 +184,7 @@ try {
   await shot('5-inspector-dark');
   await page.getByRole('button', { name: 'Diagram' }).click();
   await page.locator('.react-flow__node').first().waitFor();
-  check(await page.getByTestId('release-banner').isVisible(), 'the release claim banner is visible on the Diagram tab');
+  check((await page.locator('[data-testid="release-banner"]').count()) === 0 && (await page.getByTestId('mode-modal').count()) === 0, 'no banner and no modal on the Diagram tab');
   check((await page.locator('.react-flow__node').count()) === 7, 'seven diagram boxes');
   check(await page.evaluate(() => {
     const boxes = [...document.querySelectorAll('.react-flow__edge-textbg')].map((e) => e.getBoundingClientRect());
@@ -184,7 +193,7 @@ try {
     return boxes.length === 7 && boxes.every((b, i) => boxes.every((c, j) => i === j || !hit(b, c)) && nodes.every((n) => !hit(b, n)));
   }), 'edge labels overlap neither each other nor a box');
   const node = page.locator('.react-flow__node', { hasText: 'Audit trail' }).first();
-  await node.scrollIntoViewIfNeeded(); // the Diagram tab's release banner pushes the bottom row below a 900px fold
+  await node.scrollIntoViewIfNeeded(); // the bottom row can sit below a 900px fold
   const before = await node.boundingBox();
   await page.mouse.move(before.x + before.width / 2, before.y + before.height / 2);
   await page.mouse.down(); await page.mouse.move(before.x + before.width / 2 + 60, before.y + before.height / 2 + 30, { steps: 6 }); await page.mouse.up();

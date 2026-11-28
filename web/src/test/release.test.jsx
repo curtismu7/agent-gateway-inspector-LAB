@@ -1,9 +1,9 @@
-// Ping release claim (2026-11-02), UNVERIFIED on our tenant: the banner on every tab, the four scope checks, the hold panel,
+// Ping release claim (2026-11-02), UNVERIFIED on our tenant: the modal that carries the notice, the four scope checks, the hold panel,
 // the exact-call approval and the retry, as the UI shows them. The server behaviour itself is tested in server/test.
 import React from "react";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import App from "../App.jsx";
+import App, { MODE_LINES } from "../App.jsx";
 import CallDetail from "../components/CallDetail.jsx";
 import { buildSteps } from "../components/Flow.jsx";
 import { STORY } from "../components/Story.jsx";
@@ -39,39 +39,51 @@ function fakeApi(opts = {}) {
   });
   return state;
 }
-afterEach(() => { vi.restoreAllMocks(); });
+afterEach(() => { vi.restoreAllMocks(); sessionStorage.clear(); });
 
-const BANNER = /Ping release claim \(2026-11-02\), UNVERIFIED on our tenant\./;
+const CLAIM = /Ping release claim \(2026-11-02\) it simulates is UNVERIFIED on our tenant/;
 
-test("the release claim banner is on the Inspector tab and the Diagram tab, says the mode and that there is no live path, and is there once", async () => {
+test("the page opens on a MOCK modal that carries the release claim notice, says Live is refused, and the old banner is gone", async () => {
   fakeApi();
   render(<App />);
   await screen.findByRole("option", { name: /Unattended hold/ });
-  const banner = screen.getByTestId("release-banner");
-  expect(screen.getByRole("region", { name: "Release claim notice" })).toBe(banner);
-  expect(banner).toHaveTextContent(BANNER);
-  expect(banner).toHaveTextContent(/Live is refused: there is no live gateway, so there is no live path until the release is on our tenant/);
+  const modal = screen.getByTestId("mode-modal");
+  expect(modal).toHaveAttribute("data-mode", "mock");
+  expect(modal).toHaveTextContent(/MOCK/);
+  expect(modal).toHaveTextContent(CLAIM);
+  expect(modal).toHaveTextContent(/Everything on this page is simulated: a stub gateway and stub tool servers on loopback, nothing real is called/);
+  expect(modal).toHaveTextContent(/Live is refused: there is no live gateway, so there is no live path until the release is on our tenant/);
+  expect(screen.queryByTestId("release-banner")).toBeNull();
+  expect(screen.queryByRole("region", { name: "Release claim notice" })).toBeNull();
+  expect(document.querySelector(".banner")).toBeNull();
+  expect(screen.getAllByTestId("mode-modal")).toHaveLength(1);
+  await userEvent.click(screen.getByTestId("mode-modal-ok"));
+  expect(screen.queryByTestId("mode-modal")).toBeNull();
   await userEvent.click(screen.getByRole("button", { name: "Diagram" }));
-  expect(screen.getByRole("region", { name: "Release claim notice" })).toHaveTextContent(BANNER);
-  expect(screen.getAllByTestId("release-banner")).toHaveLength(1);
-  await userEvent.click(screen.getByRole("button", { name: "Inspector" }));
-  expect(screen.getByTestId("release-banner")).toBeInTheDocument();
+  expect(screen.queryByTestId("mode-modal")).toBeNull();
+  expect(screen.queryByTestId("release-banner")).toBeNull();
 });
 
-test("the banner stays when the API is unreachable, and in presenter mode", async () => {
+test("the REAL line (Live is never reachable: it is refused) still says so and keeps the UNVERIFIED notice", () => {
+  expect(MODE_LINES.real).toMatch(/Live is refused in this app: there is no live gateway, so it never runs in Real/);
+  expect(MODE_LINES.real).toMatch(CLAIM);
+});
+
+test("with the API unreachable the modal still opens on MOCK with the release claim notice, and the unreachable alert stays; presenter mode does not bring the banner back", async () => {
   globalThis.fetch = vi.fn(() => Promise.reject(new Error("down")));
   const first = render(<App />);
   expect(await screen.findAllByRole("alert")).not.toHaveLength(0);
-  expect(screen.getByTestId("release-banner")).toHaveTextContent(BANNER);
-  expect(screen.getByTestId("release-banner")).toHaveTextContent(/^Mock mode\./);
+  expect(screen.getByTestId("mode-modal")).toHaveTextContent(CLAIM);
+  expect(screen.getByTestId("mode-modal")).toHaveTextContent(/MOCK/);
+  expect(screen.queryByTestId("release-banner")).toBeNull();
   first.unmount();
   fakeApi();
   render(<App />);
   await screen.findByRole("option", { name: /Unattended hold/ });
   await userEvent.keyboard("p");
-  expect(screen.getByTestId("release-banner")).toHaveTextContent(BANNER);
+  expect(screen.queryByTestId("release-banner")).toBeNull();
   await userEvent.click(screen.getByRole("button", { name: "Diagram" }));
-  expect(screen.getByTestId("release-banner")).toBeInTheDocument();
+  expect(screen.queryByTestId("release-banner")).toBeNull();
 });
 
 test("the four scope checks show in order, each with a word and a glyph; the first refusal is marked and the rest are not reached", () => {

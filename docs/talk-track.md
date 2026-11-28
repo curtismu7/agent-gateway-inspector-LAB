@@ -2,7 +2,7 @@
 
 Start: `npm run build && npm start`, open http://127.0.0.1:5850/ on the Inspector tab, with a fresh Reset.
 
-> **Say this first on every run:** the banner at the top starts "Mock mode." and then reads "Ping release claim (2026-11-02), UNVERIFIED on our tenant". The four scope layers, the hold outcome and the single-use approvals are what Ping's release is claimed to do. This app simulates them. The header shows "Mode: Mock" and the banner says "Mock mode."; press Live to show that it is refused, because there is no live gateway and no live path until the release is on our tenant. Press P for presenter mode (the banner and the mode stay), Esc to leave.
+> **Say this first on every run:** the page opens on a Mock modal (the word MOCK, then "Got it"); its line says everything is simulated and that the Ping release claim (2026-11-02) is UNVERIFIED on our tenant. The four scope layers, the hold outcome and the single-use approvals are what Ping's release is claimed to do. This app simulates them. The header shows "Mode: Mock"; press Live to show that it is refused, because there is no live gateway and no live path until the release is on our tenant. Press P for presenter mode (the mode stays), Esc to leave.
 
 ## Pitch
 
@@ -10,7 +10,7 @@ Start: `npm run build && npm start`, open http://127.0.0.1:5850/ on the Inspecto
 
 ## Live steps
 
-1. **Orient (20s).** Point at the "Mode: Mock" chip in the header, the call list on the left, call detail on the right. Say: "Everything here is simulated and local. No real gateway, no tenant." Press Live in the header toggle: a note says Live is refused and the page stays in Mock (the chip and the banner still say Mock). Press P for presenter mode: the mode chip and the banner stay, the toggle, Reset and theme buttons go; Esc leaves.
+1. **Orient (20s).** Point at the "Mode: Mock" chip in the header, the call list on the left, call detail on the right. Say: "Everything here is simulated and local. No real gateway, no tenant." Press Live in the header toggle: a note says Live is refused and the page stays in Mock (the chip still says Mock). Press P for presenter mode: the mode chip stays, the toggle, Reset and theme buttons go; Esc leaves.
 2. **Allow.** In the Scenario picker choose "Benign call", press Run. Click the call. Say: "A support agent reads a ticket it is entitled to. Allow, forwarded, and the rule that matched is shown."
 3. **Deny on scope.** Choose "Scope-exceeding call", Run. Say: "Same agent tries to move money. It never held that scope, so no rule is even consulted."
 4. **Deny on injection.** Choose "Prompt-injected tool argument", Run. Open the detail. Say: "Instruction-like text in an argument is denied before the tool sees it. Note the text is shown inert, hidden characters as chips."

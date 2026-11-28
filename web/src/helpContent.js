@@ -10,7 +10,7 @@ export const HELP_SECTIONS = [
     heading: "What is simulated, and what is UNVERIFIED",
     body: [
       "Simulated: the gateway, the scripted agents, the three tool servers, every number. The audit key lives in memory only.",
-      "UNVERIFIED on our tenant: the Ping release claim (2026-11-02) — the four layered scope checks, the third \"hold for a human\" outcome, and approvals that work once and are bound to the exact call. The banner says so on every tab. The rules, the 500 limit, the 30 s hold and the 60 s grant window are this demo's own, not a product claim.",
+      "UNVERIFIED on our tenant: the Ping release claim (2026-11-02) — the four layered scope checks, the third \"hold for a human\" outcome, and approvals that work once and are bound to the exact call. The Mock modal says so when the page opens, and the \"Four scope checks\" heading carries the tag on every call. The rules, the 500 limit, the 30 s hold and the 60 s grant window are this demo's own, not a product claim.",
       "Not proven: that a real gateway is safe, that injection detection is complete (it is a short list of English patterns plus hidden characters), or that the audit trail is anchored outside this process."
     ]
   },
@@ -23,13 +23,13 @@ export const HELP_SECTIONS = [
       "3. Calls list on the left, call detail on the right. For a held call press \"Approve and forward\" or deny; for an unattended hold use \"Approve this exact call\", then \"Agent retries the exact call\", then try \"Replay the same approval\" — refused.",
       "4. In the Audit trail panel press \"Verify chain\"; every decision is hash-chained inside this process.",
       "5. Diagram tab: press Simulate, drag boxes if you like.",
-      "6. Press P for presenter mode (the banner and mode stay); Esc leaves."
+      "6. Press P for presenter mode (the mode stays); Esc leaves."
     ]
   },
   {
     heading: "Mode honesty",
     body: [
-      "Mock only. The header chip says \"Mode: Mock\" and the banner says \"Mock mode.\" Pressing Live is refused with the server's reason: there is no live gateway to talk to, so no live path until the release is on our tenant.",
+      "Mock only. The header chip says \"Mode: Mock\" and the page opens on a MOCK modal. Pressing Live is refused with the server's reason: there is no live gateway to talk to, so no live path until the release is on our tenant.",
       "The approver here is whoever can reach the page; a real one is a separate, authenticated channel. The page never prints the approval code."
     ]
   },

@@ -21,7 +21,7 @@ function fakeApi(shelf) {
   });
 }
 
-afterEach(() => { vi.restoreAllMocks(); });
+afterEach(() => { vi.restoreAllMocks(); sessionStorage.clear(); });
 
 test("shows this lab's own mark beside the Shelf link, and no other lab's", async () => {
   fakeApi({ shelfUrl: "http://shelf.example", demos: [{ id: "other-lab", verification: mark("in-progress", "In progress") }, { id: "agent-gateway-inspector", verification: mark("verified", "Verified", { note: "Every scenario run on the mock" }) }] });

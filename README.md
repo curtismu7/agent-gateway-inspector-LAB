@@ -6,11 +6,11 @@ Tier: Tester
 Repo: https://github.com/curtismu7/agent-gateway-inspector-LAB
 Catalog: D54
 
-> **Ping release claim (2026-11-02), UNVERIFIED on our tenant.** The four layered scope checks, the third outcome that holds for a human (attended or unattended), and approvals that work once and are bound to the exact call are what Ping's release is claimed to do (deck slide 52). This app simulates them. The header has a Mock/Live toggle and shows the mode, but **Live is refused**: there is no live gateway to talk to, and the feature has no live path until the release is on our tenant. The banner on every tab, presenter mode included, names the mode and carries this notice. See "The release claim" below for what is a console swagger name and what is lab-invented.
+> **Ping release claim (2026-11-02), UNVERIFIED on our tenant.** The four layered scope checks, the third outcome that holds for a human (attended or unattended), and approvals that work once and are bound to the exact call are what Ping's release is claimed to do (deck slide 52). This app simulates them. The header has a Mock/Live toggle and shows the mode, but **Live is refused**: there is no live gateway to talk to, and the feature has no live path until the release is on our tenant. The page opens on a Mock modal that names the mode and carries this notice, and the "Four scope checks" heading on every call, presenter mode included, repeats the tag. See "The release claim" below for what is a console swagger name and what is lab-invented.
 
 ## What is simulated
 
-**Mock mode (the only mode that runs).** Everything. Scripted agents call tools, a stub gateway decides allow, deny or hold, and allowed calls reach three stub tool servers on `127.0.0.1:5851-5853` inside the same process. The four scope layers, the hold outcome, the tokens, applications and end users, the approval codes and the audit key are all simulated and held in memory. There is no real gateway, no tenant, no credential, and no network beyond `127.0.0.1`. The banner in the app says the same.
+**Mock mode (the only mode that runs).** Everything. Scripted agents call tools, a stub gateway decides allow, deny or hold, and allowed calls reach three stub tool servers on `127.0.0.1:5851-5853` inside the same process. The four scope layers, the hold outcome, the tokens, applications and end users, the approval codes and the audit key are all simulated and held in memory. There is no real gateway, no tenant, no credential, and no network beyond `127.0.0.1`. The modal the app opens on says the same.
 
 **Live mode (refused).** The toggle is there on every page, as the standard asks, and pressing Live shows why it is refused and leaves the page in Mock. Live would be a real gateway run by the owner, and this app has no client for one: the Ping release it simulates is not on our tenant. `GET /api/info` lists which guards fail. Setting `GATEWAY_INSPECTOR_MODE=live` is refused in the same way (the doctor says so and the page opens in Mock). This is a gap against "every page has a real and a mock version", and it is deliberate; see "Known gaps and not done".
 
@@ -84,11 +84,11 @@ Other ports this app uses, all inside 5850-5899: the stub tool servers on 5851-5
 
 ## Mock and live modes
 
-- The header has a **Mock / Live** toggle on every page (the Inspector and the Diagram tab). It shows the mode as `Mode: Mock`, and the banner under it says the same ("Mock mode.").
+- The header has a **Mock / Live** toggle on every page (the Inspector and the Diagram tab). It shows the mode as `Mode: Mock`, and the page opens on a modal that says the same (MOCK).
 - **Mock** is the in-process stub gateway and the three stub tool servers. Everything in this README runs in Mock.
 - **Live** is refused. `GET /api/info` answers `{"mode":"mock","live":{"available":false,"failed":[...]}}`. Live passes only when every guard passes: the owner opted in with `GATEWAY_INSPECTOR_MODE=live`, the server is bound to loopback or `GATEWAY_INSPECTOR_BIND` is set (any value of it passes this guard, so it is a weak check and says nothing about the address), and there is a live gateway to talk to. The last guard cannot pass because there is none. Pressing Live changes nothing and sends no request; it shows the reason and leaves Mock selected. Pressing Mock clears the message.
 - **What Privilege did** (under the Run result): for each call of the run, the request the simulated agent sent to the stub gateway, the answer it got and the decisions in between, in the order `policy.js` evaluates them (agent, tool, arguments, token, the four scope layers, rate limit, rules, then the approval and the tool server). It is the family's shared trace panel, vendored and pinned in `web/src/gateway-trace/`. There is no HTTP call here, so the request and answer are a lab-shaped rendering of the in-process call (host `agent-gateway.invalid`); the decisions are labelled as computed by the stub, and a call still waiting for you appears once you answer it.
-- **Presenter mode** (press `P`, or the Presenter button; `Esc` leaves). It enlarges the text and removes the toggle, Reset and theme buttons. The mode chip and the banner stay.
+- **Presenter mode** (press `P`, or the Presenter button; `Esc` leaves). It enlarges the text and removes the toggle, Reset and theme buttons. The mode chip stays.
 - **Reset** (header button) clears the calls and starts a new audit epoch, and puts the diagram boxes back where they started.
 - Dark and light themes: the Dark/Light button sets `data-theme`; the shared stylesheet does the rest.
 
