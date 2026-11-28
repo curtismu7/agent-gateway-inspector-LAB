@@ -43,7 +43,7 @@ This app simulates a gateway deciding on agent tool calls. It is built so that r
 | Zero outbound: every scenario, the hold flow, the retry route, a replay and a reset make no non-loopback socket, DNS lookup or fetch (the guard replaces all three and records attempts). | `holdapi.test.js`: "zero outbound"; `safety.test.js`: the all-scenarios test. |
 | Reset forgets holds, references, retries and codes; the old reference is refused afterwards. | `hold.test.js`: "reset forgets every hold"; `holdapi.test.js`: "Reset restores the new state". |
 | Every editable policy field (each token, application, end user, agent, tool scope and rule field) is mutated one at a time and each mutant changes some answer. The one pair of equivalent mutants (the redundant upper bound of `allow-small-transfer`) is listed and shown to be equivalent by construction. | `server/test/policymutation.test.js`. |
-| The banner, the scope strip, the hold panel, the retry and the swagger-name tags are on screen. | `web/src/test/release.test.jsx`; `scripts/e2e.mjs`. |
+| The Mock modal, the scope strip, the hold panel, the retry and the swagger-name tags are on screen. | `web/src/test/release.test.jsx`; `scripts/e2e.mjs`. |
 
 ## Red checks
 

@@ -16,6 +16,7 @@ import Story from "./components/Story.jsx";
 import GatewayTrace from "./gateway-trace/GatewayTrace.jsx";
 import PrivilegeCheck from "./privilege-check/PrivilegeCheck.jsx";
 import RunObs from "./components/RunObs.jsx";
+import ModeModal from "./mode-modal/ModeModal.jsx";
 
 const safe = (fn, fallback) => { try { return fn(); } catch { return fallback; } };
 const initialTheme = () => {
@@ -35,17 +36,12 @@ const noteTraces = (prev, calls) => {
 
 const LIVE_REFUSED = "Live is refused: this app has no live gateway to talk to, because the Ping release it simulates is not on our tenant. It stays in mock.";
 
-// Shown on every tab, presenter mode included. The feature this app simulates is a Ping release claim; nothing here checks it against a real tenant.
-// It always names the mode the page is in, the same word the header shows.
-function ReleaseBanner({ mode }) {
-  return (
-    <section className="banner" role="region" aria-label="Release claim notice" data-testid="release-banner" data-state={mode === "live" ? "live" : "mock"}>
-      <strong className="banner__mode">{mode === "live" ? "Live mode." : "Mock mode."}</strong>{" "}
-      <strong>Ping release claim (2026-11-02), UNVERIFIED on our tenant.</strong>{" "}
-      Four layered scope checks, a third outcome that holds for a human, and approvals that work once and are bound to the exact call are what the release is claimed to do. This app simulates them with a stub gateway and stub tool servers on loopback; nothing real is called. Live is refused: there is no live gateway, so there is no live path until the release is on our tenant.
-    </section>
-  );
-}
+// The Real-or-mock modal replaced the long release-claim banner. Its line keeps what the banner said that a viewer must not miss: everything is simulated,
+// the Ping release claim this app simulates is UNVERIFIED on our tenant, and Live is refused. The "Four scope checks" heading still carries the UNVERIFIED tag on every call.
+const MODE_LINES = {
+  mock: "Everything on this page is simulated: a stub gateway and stub tool servers on loopback, nothing real is called. The Ping release claim (2026-11-02) it simulates is UNVERIFIED on our tenant, and Live is refused: there is no live gateway, so there is no live path until the release is on our tenant.",
+  real: "The Privilege gateway check calls your real gateway door with an agent key; every scenario run still goes through the stub gateway and stub tool servers. The Ping release claim (2026-11-02) it simulates is UNVERIFIED on our tenant.",
+};
 
 // "What Privilege did" under the Run result: one exchange per call of the run that has an answer. Calls still waiting for a human are named, not drawn.
 function TracePanel({ traces, source }) {
@@ -238,7 +234,7 @@ export default function App() {
       await refresh();
     } catch (e) { setLiveNote(e.message || realReason); } finally { setModeBusy(false); }
   };
-  // P enters presenter mode and Esc leaves it, unless the key is for a form control. The banner and the mode stay.
+  // P enters presenter mode and Esc leaves it, unless the key is for a form control. The mode stays.
   useEffect(() => {
     const on = (e) => {
       if (e.ctrlKey || e.metaKey || e.altKey || /^(INPUT|SELECT|TEXTAREA)$/.test(e.target?.tagName || "")) return;
@@ -277,7 +273,6 @@ export default function App() {
           </TopMenu>
         </div>
       </header>
-      <ReleaseBanner mode={mode} />
       {liveNote && <p className="alert mode-note" role="status" data-testid="live-note">{liveNote}{info?.requested === "live" ? " GATEWAY_INSPECTOR_MODE=live is set and is refused too." : ""}</p>}
       {health?.unreachable && <div className="banner" data-state="bad" role="alert">Cannot reach the gateway API. Is the server running?</div>}
       {health && !health.unreachable && health.state !== "ready" && <div className="banner" data-state="warn" role="alert">Server health is {health.state}. Run <code>npm run doctor</code>.</div>}
@@ -325,6 +320,7 @@ export default function App() {
         )}
         {view !== "diagram" && <Story active={-1} />}
       </main>
+      <ModeModal mode={source === "real" ? "real" : "mock"} lines={MODE_LINES} storageKey="agi-mode" />
       <HelpDialog isOpen={helpOpen} onClose={() => setHelpOpen(false)} sections={HELP_SECTIONS} docsUrl="https://github.com/curtismu7/agent-gateway-inspector-LAB#readme" />
       <TalkTrackDialog isOpen={talkOpen} onClose={() => setTalkOpen(false)} talk={talkSteps} />
 

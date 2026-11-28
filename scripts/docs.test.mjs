@@ -97,9 +97,9 @@ test('every field the architecture doc tags as a console swagger name is exposed
   assert.match(read('docs/architecture.md'), /`hold\.argsHash` \| `FieldHash`/);
 });
 
-test('the talk track matches the page: the Mode chip, the Mock mode banner, the Mock/Live toggle with Live refused, presenter mode, and no stale DEMO badge', () => {
+test('the talk track matches the page: the Mode chip, the Mock modal, the Mock/Live toggle with Live refused, presenter mode, and no stale DEMO badge', () => {
   const talk = read('docs/talk-track.md');
-  for (const t of ['Mode: Mock', 'Mock mode.', 'Live', 'refused', 'presenter mode', 'Esc']) assert.ok(talk.includes(t), t);
+  for (const t of ['Mode: Mock', 'Mock modal', 'Live', 'refused', 'presenter mode', 'Esc']) assert.ok(talk.includes(t), t);
   assert.doesNotMatch(talk, /DEMO badge/);
   const orient = talk.split('\n').find((l) => l.startsWith('1. **Orient'));
   for (const t of ['Mode: Mock', 'Press Live', 'refused', 'Press P', 'Esc']) assert.ok(orient?.includes(t), `step 1: ${t}`);

@@ -46,7 +46,7 @@ function fakeApi(opts = {}) {
   return state;
 }
 
-afterEach(() => { vi.restoreAllMocks(); });
+afterEach(() => { vi.restoreAllMocks(); sessionStorage.clear(); });
 
 test("the web client posts the rule 19 mode route to the server's /api/mode", async () => {
   const api = await import("../lib/api.js");
@@ -239,7 +239,7 @@ test("the unreachable-API messages go away once the API answers again", async ()
   expect(api.requests.length).toBeGreaterThan(0);
 }, 15000);
 
-test("the header has a Mock/Real toggle that shows the mode, and the banner says the same mode", async () => {
+test("the header has a Mock/Real toggle that shows the mode, and the modal says the same mode", async () => {
   fakeApi();
   render(<App />);
   await screen.findByRole("option", { name: "Benign call" });
@@ -247,11 +247,12 @@ test("the header has a Mock/Real toggle that shows the mode, and the banner says
   // Rule 19: Real is disabled with the server's reason.
   expect(screen.getByTestId("mode-select").querySelector('option[value="real"]')).toBeDisabled();
   expect(screen.getByTestId("mode-badge")).toHaveTextContent("Mode: Mock");
-  expect(screen.getByTestId("release-banner")).toHaveTextContent(/^Mock mode\./);
-  expect(screen.getByTestId("release-banner")).toHaveAttribute("data-state", "mock");
+  expect(screen.getByTestId("mode-modal")).toHaveAttribute("data-mode", "mock");
+  expect(screen.getByTestId("mode-modal")).toHaveTextContent(/MOCK/);
+  expect(screen.queryByTestId("release-banner")).toBeNull();
   await userEvent.click(screen.getByRole("button", { name: "Diagram" }));
   expect(screen.getByTestId("mode-badge")).toHaveTextContent("Mode: Mock");
-  expect(screen.getByTestId("release-banner")).toHaveTextContent(/^Mock mode\./);
+  expect(screen.getByTestId("mode-modal")).toHaveAttribute("data-mode", "mock");
 });
 
 test("Real is refused: Real is disabled so the click does nothing and the page stays in Mock", async () => {
@@ -263,7 +264,7 @@ test("Real is refused: Real is disabled so the click does nothing and the page s
   await userEvent.click(screen.getByTestId("mode-select"));
   expect(screen.getByTestId("mode-select")).toHaveValue("mock");
   expect(screen.getByTestId("mode-badge")).toHaveTextContent("Mode: Mock");
-  expect(screen.getByTestId("release-banner")).toHaveTextContent(/^Mock mode\./);
+  expect(screen.getByTestId("mode-modal")).toHaveAttribute("data-mode", "mock");
   expect(api.requests.slice(before).filter((r) => r.method !== "GET")).toEqual([]);
   await userEvent.selectOptions(screen.getByTestId("mode-select"), "mock");
   await waitFor(() => expect(screen.queryByTestId("live-note")).toBeNull());
@@ -277,7 +278,7 @@ test("rule 19: mock→mock posts /api/mode, gets the server's answer and the pag
   await waitFor(() => expect(api.requests.some((r) => r.url === "/api/mode" && r.method === "POST")).toBe(true));
   expect(JSON.parse(api.requests.find((r) => r.url === "/api/mode").init.body)).toEqual({ source: "mock" });
   expect(screen.getByTestId("mode-badge")).toHaveTextContent("Mode: Mock");
-  expect(screen.getByTestId("release-banner")).toHaveAttribute("data-state", "mock");
+  expect(screen.getByTestId("mode-modal")).toHaveAttribute("data-mode", "mock");
 });
 
 test("a settings request for live is shown as refused at load, and the page opens in Mock", async () => {
@@ -287,18 +288,18 @@ test("a settings request for live is shown as refused at load, and the page open
   expect(screen.getByTestId("mode-badge")).toHaveTextContent("Mode: Mock");
 });
 
-test("presenter mode (P, Esc): the mode and the banner stay, the toggle, Reset and theme go; typing in the picker does not toggle it", async () => {
+test("presenter mode (P, Esc): the mode stays, the toggle, Reset and theme go; typing in the picker does not toggle it", async () => {
   fakeApi();
   render(<App />);
   await screen.findByRole("option", { name: "Benign call" });
   await userEvent.keyboard("p");
   expect(document.querySelector(".app")).toHaveAttribute("data-presenter", "on");
   expect(screen.getByTestId("mode-badge")).toHaveTextContent("Mode: Mock");
-  expect(screen.getByTestId("release-banner")).toBeInTheDocument();
+  expect(screen.queryByTestId("release-banner")).toBeNull();
   expect(screen.queryByTestId("mode-select")).toBeNull();
   expect(screen.queryByRole("button", { name: "Reset" })).toBeNull();
   await userEvent.click(screen.getByRole("button", { name: "Diagram" }));
-  expect(screen.getByTestId("release-banner")).toBeInTheDocument();
+  expect(screen.queryByTestId("release-banner")).toBeNull();
   await userEvent.keyboard("{Escape}");
   expect(document.querySelector(".app")).not.toHaveAttribute("data-presenter");
   expect(screen.getByTestId("mode-select")).toBeInTheDocument();
