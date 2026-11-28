@@ -3,7 +3,7 @@
 import React from "react";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import App, { MODE_LINES } from "../App.jsx";
+import App from "../App.jsx";
 import CallDetail from "../components/CallDetail.jsx";
 import { buildSteps } from "../components/Flow.jsx";
 import { STORY } from "../components/Story.jsx";
@@ -16,7 +16,7 @@ function fakeApi(opts = {}) {
     const method = init.method || "GET";
     state.requests.push({ url, method, init });
     if (url === "/api/health") return json({ schema: "demo-health/1", state: "ready" });
-    if (url === "/api/info") return json({ mode: "mock", requested: "mock", modes: ["mock", "live"], live: { available: false, failed: ["live-gateway"], needs: ["x"] } });
+    if (url === "/api/info") return json({ mode: "mock", ...(state.source ? { source: state.source } : {}), requested: "mock", modes: ["mock", "live"], live: { available: false, failed: ["live-gateway"], needs: ["x"] } });
     if (url === "/api/scenarios") return json({ scenarios: [{ id: "hold-unattended", title: "Unattended hold, approved, retried once", description: "d", agent: "finance-agent", steps: 2 }] });
     if (url.startsWith("/api/calls?")) return json({ calls: state.calls, cursor: 1, epoch: 1 });
     if (url === "/api/audit?limit=500") return json({ entries: [], size: 0, headSeq: 0 });
@@ -64,9 +64,13 @@ test("the page opens on a MOCK modal that carries the release claim notice, says
   expect(screen.queryByTestId("release-banner")).toBeNull();
 });
 
-test("the REAL line (Live is never reachable: it is refused) still says so and keeps the UNVERIFIED notice", () => {
-  expect(MODE_LINES.real).toMatch(/Live is refused in this app: there is no live gateway, so it never runs in Real/);
-  expect(MODE_LINES.real).toMatch(CLAIM);
+test("when /api/info reports source real the modal says REAL, that only the gateway check is real and the scenario runs stay on the stub, and keeps the UNVERIFIED notice", async () => {
+  fakeApi({ source: "real" });
+  render(<App />);
+  await waitFor(() => expect(screen.getByTestId("mode-modal")).toHaveAttribute("data-mode", "real"));
+  expect(screen.getByTestId("mode-modal")).toHaveTextContent(/REAL/);
+  expect(screen.getByTestId("mode-modal")).toHaveTextContent(/The Privilege gateway check calls your real gateway door with an agent key; every scenario run still goes through the stub gateway and stub tool servers/);
+  expect(screen.getByTestId("mode-modal")).toHaveTextContent(CLAIM);
 });
 
 test("with the API unreachable the modal still opens on MOCK with the release claim notice, and the unreachable alert stays; presenter mode does not bring the banner back", async () => {

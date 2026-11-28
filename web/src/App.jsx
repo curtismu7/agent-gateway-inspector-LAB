@@ -38,9 +38,9 @@ const LIVE_REFUSED = "Live is refused: this app has no live gateway to talk to, 
 
 // The Real-or-mock modal replaced the long release-claim banner. Its line keeps what the banner said that a viewer must not miss: everything is simulated,
 // the Ping release claim this app simulates is UNVERIFIED on our tenant, and Live is refused. The "Four scope checks" heading still carries the UNVERIFIED tag on every call.
-export const MODE_LINES = {
+const MODE_LINES = {
   mock: "Everything on this page is simulated: a stub gateway and stub tool servers on loopback, nothing real is called. The Ping release claim (2026-11-02) it simulates is UNVERIFIED on our tenant, and Live is refused: there is no live gateway, so there is no live path until the release is on our tenant.",
-  real: "Live is refused in this app: there is no live gateway, so it never runs in Real. The Ping release claim (2026-11-02) it simulates is UNVERIFIED on our tenant.",
+  real: "The Privilege gateway check calls your real gateway door with an agent key; every scenario run still goes through the stub gateway and stub tool servers. The Ping release claim (2026-11-02) it simulates is UNVERIFIED on our tenant.",
 };
 
 // "What Privilege did" under the Run result: one exchange per call of the run that has an answer. Calls still waiting for a human are named, not drawn.
@@ -320,7 +320,7 @@ export default function App() {
         )}
         {view !== "diagram" && <Story active={-1} />}
       </main>
-      <ModeModal mode={mode === "live" ? "real" : "mock"} lines={MODE_LINES} storageKey="agi-mode" />
+      <ModeModal mode={source === "real" ? "real" : "mock"} lines={MODE_LINES} storageKey="agi-mode" />
       <HelpDialog isOpen={helpOpen} onClose={() => setHelpOpen(false)} sections={HELP_SECTIONS} docsUrl="https://github.com/curtismu7/agent-gateway-inspector-LAB#readme" />
       <TalkTrackDialog isOpen={talkOpen} onClose={() => setTalkOpen(false)} talk={talkSteps} />
 
